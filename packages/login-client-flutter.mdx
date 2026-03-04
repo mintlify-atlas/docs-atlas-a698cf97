@@ -1,0 +1,540 @@
+---
+title: LoginClient Flutter
+description: Flutter Secure Storage implementation of CredentialsStorage for the login_client package
+---
+
+The `login_client_flutter` package provides a secure, production-ready implementation of `CredentialsStorage` for the `login_client` package using `flutter_secure_storage`. This ensures OAuth2 credentials are stored securely on device.
+
+## Installation
+
+Add both packages to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  login_client: ^3.2.0
+  login_client_flutter: ^3.0.0
+```
+
+<Note>
+  This package requires Flutter SDK `>=3.10.0`.
+</Note>
+
+## Quick Start
+
+<Steps>
+  <Step title="Import the package">
+    ```dart
+    import 'package:login_client/login_client.dart';
+    import 'package:login_client_flutter/login_client_flutter.dart';
+    ```
+  </Step>
+
+  <Step title="Use FlutterSecureCredentialsStorage">
+    Create a `LoginClient` with `FlutterSecureCredentialsStorage`:
+
+    ```dart
+    final loginClient = LoginClient(
+      oAuthSettings: OAuthSettings(
+        authorizationUri: Uri.parse('https://api.example.com/oauth/token'),
+        clientId: 'com.example.myapp',
+      ),
+      credentialsStorage: const FlutterSecureCredentialsStorage(),
+    );
+    ```
+  </Step>
+
+  <Step title="Initialize and use">
+    ```dart
+    await loginClient.initialize();
+    
+    // Credentials are automatically saved securely
+    await loginClient.logIn(
+      ResourceOwnerPasswordStrategy('user@example.com', 'password'),
+    );
+    ```
+  </Step>
+</Steps>
+
+## API Reference
+
+### FlutterSecureCredentialsStorage
+
+A secure implementation of `CredentialsStorage` using `flutter_secure_storage`.
+
+```dart
+class FlutterSecureCredentialsStorage implements CredentialsStorage {
+  const FlutterSecureCredentialsStorage();
+
+  Future<Credentials?> read();
+  Future<void> save(Credentials credentials);
+  Future<void> clear();
+}
+```
+
+#### Storage Details
+
+- **Key**: `login_client_flutter_credentials`
+- **Storage**: Uses `FlutterSecureStorage` under the hood
+- **Platform-specific**:
+  - **iOS**: Keychain
+  - **Android**: AES encryption via Android Keystore
+  - **macOS**: Keychain
+  - **Linux**: libsecret
+  - **Windows**: DPAPI
+  - **Web**: Not supported (use alternative storage)
+
+#### Methods
+
+##### read()
+
+Reads stored credentials from secure storage.
+
+```dart
+final credentials = await storage.read();
+if (credentials != null) {
+  print('Found saved credentials');
+}
+```
+
+**Returns:**
+- `Future<Credentials?>` - The stored credentials, or `null` if none exist or parsing fails
+
+##### save()
+
+Saves credentials to secure storage.
+
+```dart
+final credentials = Credentials(
+  accessToken: 'token',
+  refreshToken: 'refresh',
+  tokenEndpoint: Uri.parse('https://api.example.com/oauth/token'),
+);
+
+await storage.save(credentials);
+```
+
+**Parameters:**
+- `credentials` (`Credentials`) - The credentials to store
+
+##### clear()
+
+Removes credentials from secure storage.
+
+```dart
+await storage.clear();
+print('Credentials cleared');
+```
+
+## Android Configuration
+
+<Warning>
+  Android requires special configuration to prevent `javax.crypto.BadPaddingException` errors when restoring from backup.
+</Warning>
+
+### Exclude from Android Backup
+
+Flutter Secure Storage must be excluded from Android's automatic backup system:
+
+<Steps>
+  <Step title="Update AndroidManifest.xml">
+    Add `android:fullBackupContent` to your application tag:
+
+    ```xml
+    <!-- android/app/src/main/AndroidManifest.xml -->
+    <manifest>
+        <application
+            android:name="${applicationName}"
+            android:label="your_app_name"
+            android:icon="@mipmap/ic_launcher"
+            android:fullBackupContent="@xml/backup_rules">
+            <!-- ... -->
+        </application>
+    </manifest>
+    ```
+  </Step>
+
+  <Step title="Create backup rules">
+    Create a new file at `android/app/src/main/res/xml/backup_rules.xml`:
+
+    ```xml
+    <?xml version="1.0" encoding="utf-8"?>
+    <full-backup-content>
+        <exclude domain="sharedpref" path="FlutterSecureStorage" />
+    </full-backup-content>
+    ```
+  </Step>
+
+  <Step title="Create res/xml directory if needed">
+    If the `res/xml` directory doesn't exist, create it:
+
+    ```bash
+    mkdir -p android/app/src/main/res/xml
+    ```
+  </Step>
+</Steps>
+
+### Why This Is Required
+
+Android's automatic backup can restore encrypted credentials, but the encryption keys may have changed, causing decryption failures. Excluding FlutterSecureStorage from backups prevents this issue.
+
+## iOS Configuration
+
+No additional configuration is required for iOS. Credentials are automatically stored in the iOS Keychain.
+
+<Accordion title="Keychain Access Groups (Advanced)">
+  If you need to share credentials between apps, configure Keychain access groups:
+
+  ```dart
+  // Note: FlutterSecureCredentialsStorage uses default configuration
+  // For custom configurations, use FlutterSecureStorage directly
+  ```
+
+  See [flutter_secure_storage documentation](https://pub.dev/packages/flutter_secure_storage) for advanced configuration.
+</Accordion>
+
+## Complete Example
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:login_client/login_client.dart';
+import 'package:login_client_flutter/login_client_flutter.dart';
+
+class AuthService {
+  late final LoginClient _loginClient;
+  
+  Future<void> initialize() async {
+    final oAuthSettings = OAuthSettings(
+      authorizationUri: Uri.parse('https://api.example.com/oauth/token'),
+      clientId: 'com.example.myapp',
+      scopes: ['read', 'write'],
+    );
+
+    _loginClient = LoginClient(
+      oAuthSettings: oAuthSettings,
+      // Use secure storage for credentials
+      credentialsStorage: const FlutterSecureCredentialsStorage(),
+    );
+
+    // Restore saved credentials if they exist
+    await _loginClient.initialize();
+
+    // Check if user is already logged in
+    if (_loginClient.loggedIn) {
+      print('User is already authenticated');
+    }
+  }
+
+  Future<void> login(String email, String password) async {
+    try {
+      await _loginClient.logIn(
+        ResourceOwnerPasswordStrategy(email, password),
+      );
+      print('Login successful - credentials saved securely');
+    } on AuthorizationException catch (e) {
+      print('Login failed: ${e.description}');
+      rethrow;
+    }
+  }
+
+  Future<void> logout() async {
+    await _loginClient.logOut();
+    print('Logged out - credentials cleared from secure storage');
+  }
+
+  bool get isLoggedIn => _loginClient.loggedIn;
+
+  LoginClient get client => _loginClient;
+
+  void dispose() {
+    _loginClient.dispose();
+  }
+}
+
+// Usage in Flutter app
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  final authService = AuthService();
+  await authService.initialize();
+  
+  runApp(MyApp(authService: authService));
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({required this.authService, Key? key}) : super(key: key);
+  
+  final AuthService authService;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: authService.isLoggedIn
+          ? const HomeScreen()
+          : const LoginScreen(),
+    );
+  }
+}
+```
+
+## Integration with CQRS
+
+<CodeGroup>
+```dart Service Class
+import 'package:login_client/login_client.dart';
+import 'package:login_client_flutter/login_client_flutter.dart';
+import 'package:cqrs/cqrs.dart';
+
+class ApiService {
+  late final LoginClient _loginClient;
+  late final Cqrs _cqrs;
+
+  Future<void> initialize() async {
+    // Setup authenticated client with secure storage
+    _loginClient = LoginClient(
+      oAuthSettings: OAuthSettings(
+        authorizationUri: Uri.parse('https://api.example.com/oauth/token'),
+        clientId: 'com.example.myapp',
+      ),
+      credentialsStorage: const FlutterSecureCredentialsStorage(),
+    );
+
+    await _loginClient.initialize();
+
+    // Setup CQRS client using authenticated HTTP client
+    _cqrs = Cqrs(
+      _loginClient,  // Automatically includes auth headers
+      Uri.parse('https://api.example.com/api/'),
+    );
+  }
+
+  Future<void> login(String username, String password) async {
+    await _loginClient.logIn(
+      ResourceOwnerPasswordStrategy(username, password),
+    );
+  }
+
+  Future<QueryResult<T>> query<T>(Query<T> query) => _cqrs.get(query);
+  Future<CommandResult> command(Command cmd) => _cqrs.run(cmd);
+
+  bool get isAuthenticated => _loginClient.loggedIn;
+}
+```
+
+```dart Complete App
+import 'package:flutter/material.dart';
+import 'package:login_client/login_client.dart';
+import 'package:login_client_flutter/login_client_flutter.dart';
+import 'package:cqrs/cqrs.dart';
+
+class App extends StatefulWidget {
+  const App({Key? key}) : super(key: key);
+
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> {
+  late final LoginClient _loginClient;
+  late final Cqrs _cqrs;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    _loginClient = LoginClient(
+      oAuthSettings: OAuthSettings(
+        authorizationUri: Uri.parse('https://api.example.com/oauth/token'),
+        clientId: 'com.example.myapp',
+      ),
+      credentialsStorage: const FlutterSecureCredentialsStorage(),
+    );
+
+    await _loginClient.initialize();
+
+    _cqrs = Cqrs(
+      _loginClient,
+      Uri.parse('https://api.example.com/api/'),
+    );
+
+    // Listen for credential changes
+    _loginClient.onCredentialsChanged.listen((credentials) {
+      if (credentials == null && mounted) {
+        // User logged out or session expired
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
+    });
+
+    setState(() => _isInitialized = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return const MaterialApp(
+        home: Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    return MaterialApp(
+      home: _loginClient.loggedIn
+          ? HomeScreen(cqrs: _cqrs, loginClient: _loginClient)
+          : LoginScreen(loginClient: _loginClient),
+    );
+  }
+
+  @override
+  void dispose() {
+    _loginClient.dispose();
+    super.dispose();
+  }
+}
+```
+</CodeGroup>
+
+## Security Considerations
+
+<Accordion title="Storage Security">
+  `FlutterSecureStorage` provides platform-specific secure storage:
+  
+  - **iOS/macOS**: Keychain with kSecAttrAccessibleAfterFirstUnlock
+  - **Android**: AES encryption with keys stored in Android Keystore
+  - **Linux**: libsecret
+  - **Windows**: Windows Credential Manager (DPAPI)
+</Accordion>
+
+<Accordion title="Backup and Restore">
+  Always exclude credentials from backups to prevent decryption errors:
+  
+  - Android: Use `backup_rules.xml` (required)
+  - iOS: Keychain items are automatically excluded from iCloud backup
+</Accordion>
+
+<Accordion title="Key Rotation">
+  If encryption keys are lost (device reset, OS reinstall), credentials cannot be recovered. Your app should handle this gracefully by logging the user out.
+</Accordion>
+
+<Accordion title="Rooted/Jailbroken Devices">
+  On compromised devices, secure storage may be accessible. Consider additional security measures for high-security applications.
+</Accordion>
+
+## Testing
+
+For testing, you can use `InMemoryCredentialsStorage` instead:
+
+```dart
+import 'package:login_client/login_client.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('Login flow test', (tester) async {
+    final loginClient = LoginClient(
+      oAuthSettings: OAuthSettings(
+        authorizationUri: Uri.parse('https://test.example.com/oauth/token'),
+        clientId: 'test_client',
+      ),
+      // Use in-memory storage for tests
+      credentialsStorage: InMemoryCredentialsStorage(),
+    );
+
+    await loginClient.initialize();
+    
+    // Test login logic...
+  });
+}
+```
+
+## Migration from Other Storage
+
+If you're migrating from custom storage to `FlutterSecureCredentialsStorage`:
+
+```dart
+Future<void> migrateCredentials(
+  CredentialsStorage oldStorage,
+  FlutterSecureCredentialsStorage newStorage,
+) async {
+  final credentials = await oldStorage.read();
+  if (credentials != null) {
+    await newStorage.save(credentials);
+    await oldStorage.clear();
+    print('Credentials migrated successfully');
+  }
+}
+```
+
+## Troubleshooting
+
+<Accordion title="javax.crypto.BadPaddingException (Android)">
+  This occurs when Android restores encrypted data but encryption keys have changed.
+  
+  **Solution**: Follow the Android Configuration steps above to exclude FlutterSecureStorage from backups.
+</Accordion>
+
+<Accordion title="Credentials not persisting">
+  Ensure you've called `await loginClient.initialize()` after creating the client.
+  
+  ```dart
+  final loginClient = LoginClient(
+    oAuthSettings: settings,
+    credentialsStorage: const FlutterSecureCredentialsStorage(),
+  );
+  
+  // This is required!
+  await loginClient.initialize();
+  ```
+</Accordion>
+
+<Accordion title="App crashes on login">
+  Check if you have the correct permissions and configurations:
+  
+  - Android: Verify `backup_rules.xml` is properly configured
+  - iOS: Ensure keychain entitlements are set (done automatically by Flutter)
+</Accordion>
+
+## Related Packages
+
+<CardGroup cols={2}>
+  <Card title="login_client" icon="key" href="/packages/login-client">
+    Core OAuth2 client implementation
+  </Card>
+  <Card title="flutter_secure_storage" icon="lock" href="https://pub.dev/packages/flutter_secure_storage">
+    Underlying secure storage package
+  </Card>
+  <Card title="cqrs" icon="arrows-split-up-and-left" href="/packages/cqrs">
+    CQRS client for authenticated API calls
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Always use secure storage in production">
+    Never use `InMemoryCredentialsStorage` in production apps. Always use `FlutterSecureCredentialsStorage`.
+  </Step>
+
+  <Step title="Configure Android backup exclusion">
+    Set up `backup_rules.xml` before releasing to prevent credential decryption errors.
+  </Step>
+
+  <Step title="Handle initialization errors">
+    Wrap initialization in try-catch to handle potential storage errors gracefully.
+
+    ```dart
+    try {
+      await loginClient.initialize();
+    } catch (e) {
+      // Handle storage errors - credentials may be corrupted
+      await loginClient.logOut();
+    }
+    ```
+  </Step>
+
+  <Step title="Test on multiple devices">
+    Test credential persistence across app restarts on different Android and iOS devices.
+  </Step>
+</Steps>

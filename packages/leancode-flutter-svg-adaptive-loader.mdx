@@ -1,0 +1,368 @@
+---
+title: SVG Adaptive Loader
+description: Automatically detect and load SVG assets in both XML and binary vector formats, enabling optimized CI/CD compilation workflows for Flutter apps.
+---
+
+# SVG Adaptive Loader
+
+An adaptive bytes loader for Flutter that intelligently detects and loads `.svg` assets in both XML-based and binary compiled formats, making it perfect for optimized build pipelines.
+
+## Installation
+
+Add the package to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  leancode_flutter_svg_adaptive_loader: ^1.1.1
+```
+
+## Import
+
+```dart
+import 'package:leancode_flutter_svg_adaptive_loader/leancode_flutter_svg_adaptive_loader.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+```
+
+## Motivation
+
+This package solves a specific problem in Flutter development:
+
+<Note>
+**The Problem:**
+- XML-based SVG files are easy to maintain but slow to load
+- Compiled binary vectors (`.svg.vec`) are fast but not human-readable
+- You want to keep original SVGs in your repository
+- You want to compile them in CI/CD for release builds
+- You don't want to change asset paths in code for different build types
+</Note>
+
+**The Solution:** `FlutterSvgAdaptiveLoader` automatically detects the format and loads it appropriately, so you can:
+- Use XML SVGs in debug builds for easy development
+- Use compiled binary SVGs in release builds for performance
+- Keep the same `.svg` extension and asset paths in your code
+
+## How It Works
+
+The loader examines the first 100 characters of the file to detect UTF-8 decoder replacement characters. If it finds invalid UTF-8 sequences, it treats the file as binary; otherwise, it processes it as XML.
+
+```dart
+// Automatically detects format
+// - If XML: compiles to binary in memory
+// - If binary: loads directly
+SvgPicture(FlutterSvgAdaptiveLoader('assets/logo.svg'))
+```
+
+## Basic Usage
+
+Simply pass a `FlutterSvgAdaptiveLoader` to `SvgPicture`:
+
+```dart
+SvgPicture(
+  FlutterSvgAdaptiveLoader('assets/logo.svg'),
+  width: 200,
+  height: 200,
+)
+```
+
+### With Custom Options
+
+```dart
+SvgPicture(
+  FlutterSvgAdaptiveLoader(
+    'assets/icon.svg',
+    packageName: 'my_package',
+    assetBundle: customBundle,
+  ),
+  width: 48,
+  height: 48,
+  colorFilter: ColorFilter.mode(
+    Colors.blue,
+    BlendMode.srcIn,
+  ),
+)
+```
+
+## Integration with flutter_gen
+
+If you're using [flutter_gen](https://pub.dev/packages/flutter_gen) for type-safe asset references, you can create an extension for even cleaner usage:
+
+<Steps>
+  <Step title="Create the extension file">
+    ```dart adaptive_svg_extension.dart
+    import 'package:leancode_flutter_svg_adaptive_loader/leancode_flutter_svg_adaptive_loader.dart';
+    import 'package:flutter/widgets.dart';
+    import 'package:flutter_svg/flutter_svg.dart';
+    import 'package:your_app/gen/assets.gen.dart'; // Your flutter_gen import
+    
+    extension AdaptiveSvgGenImage on SvgGenImage {
+      SvgPicture adaptiveSvg({
+        Key? key,
+        bool matchTextDirection = false,
+        AssetBundle? bundle,
+        String? package,
+        double? width,
+        double? height,
+        BoxFit fit = BoxFit.contain,
+        AlignmentGeometry alignment = Alignment.center,
+        bool allowDrawingOutsideViewBox = false,
+        WidgetBuilder? placeholderBuilder,
+        String? semanticsLabel,
+        bool excludeFromSemantics = false,
+        ColorFilter? colorFilter,
+        Clip clipBehavior = Clip.hardEdge,
+      }) {
+        return SvgPicture(
+          FlutterSvgAdaptiveLoader(
+            path,
+            assetBundle: bundle,
+            packageName: package,
+          ),
+          key: key,
+          matchTextDirection: matchTextDirection,
+          width: width,
+          height: height,
+          fit: fit,
+          alignment: alignment,
+          allowDrawingOutsideViewBox: allowDrawingOutsideViewBox,
+          placeholderBuilder: placeholderBuilder,
+          semanticsLabel: semanticsLabel,
+          excludeFromSemantics: excludeFromSemantics,
+          colorFilter: colorFilter,
+          clipBehavior: clipBehavior,
+        );
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Use the extension">
+    ```dart
+    // Clean, type-safe usage
+    Assets.icons.logo.adaptiveSvg(
+      width: 200,
+      height: 200,
+    )
+    ```
+  </Step>
+</Steps>
+
+## CI/CD Workflow Example
+
+Here's how to set up a build pipeline that compiles SVGs for release builds:
+
+<Tabs>
+  <Tab title="GitHub Actions">
+    ```yaml .github/workflows/build.yml
+    name: Build Release
+    
+    on:
+      push:
+        branches: [main]
+    
+    jobs:
+      build:
+        runs-on: ubuntu-latest
+        
+        steps:
+          - uses: actions/checkout@v3
+          
+          - name: Setup Flutter
+            uses: subosito/flutter-action@v2
+            with:
+              flutter-version: '3.19.0'
+          
+          - name: Install dependencies
+            run: flutter pub get
+          
+          # Compile SVGs to binary format
+          - name: Compile SVG assets
+            run: |
+              flutter pub global activate vector_graphics_compiler
+              find assets -name "*.svg" -type f -exec sh -c '
+                vector_graphics_compiler "$1" "$1"
+              ' _ {} \;
+          
+          - name: Build APK
+            run: flutter build apk --release
+    ```
+  </Tab>
+  
+  <Tab title="Shell Script">
+    ```bash scripts/compile_svgs.sh
+    #!/bin/bash
+    
+    # Activate the vector graphics compiler
+    flutter pub global activate vector_graphics_compiler
+    
+    # Find all SVG files and compile them
+    find assets -name "*.svg" -type f | while read svg_file; do
+      echo "Compiling $svg_file"
+      vector_graphics_compiler "$svg_file" "$svg_file"
+    done
+    
+    echo "SVG compilation complete!"
+    ```
+    
+    Make it executable:
+    ```bash
+    chmod +x scripts/compile_svgs.sh
+    ```
+    
+    Run before release builds:
+    ```bash
+    ./scripts/compile_svgs.sh
+    flutter build apk --release
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+Keep the `.svg` extension even for compiled vectors. This way, your code doesn't need to change between debug and release builds.
+</Tip>
+
+## Complete Example
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:leancode_flutter_svg_adaptive_loader/leancode_flutter_svg_adaptive_loader.dart';
+
+class LogoWidget extends StatelessWidget {
+  const LogoWidget({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SvgPicture(
+        FlutterSvgAdaptiveLoader(
+          'assets/images/logo.svg',
+        ),
+        width: 200,
+        height: 200,
+        placeholderBuilder: (context) => CircularProgressIndicator(),
+        semanticsLabel: 'App Logo',
+      ),
+    );
+  }
+}
+```
+
+## API Reference
+
+### FlutterSvgAdaptiveLoader
+
+```dart
+class FlutterSvgAdaptiveLoader extends BytesLoader {
+  const FlutterSvgAdaptiveLoader(
+    String assetName, {
+    String? packageName,
+    AssetBundle? assetBundle,
+  });
+}
+```
+
+**Parameters:**
+
+- `assetName` - The path to the SVG asset (e.g., `'assets/icon.svg'`)
+- `packageName` - Optional package name if loading from a package
+- `assetBundle` - Optional custom asset bundle (defaults to `DefaultAssetBundle` or `rootBundle`)
+
+## Advanced Configuration
+
+### Custom Asset Bundle
+
+```dart
+final customBundle = NetworkAssetBundle(Uri.parse('https://example.com'));
+
+SvgPicture(
+  FlutterSvgAdaptiveLoader(
+    'logo.svg',
+    assetBundle: customBundle,
+  ),
+)
+```
+
+### Package Assets
+
+When loading SVGs from a Flutter package:
+
+```dart
+SvgPicture(
+  FlutterSvgAdaptiveLoader(
+    'assets/icon.svg',
+    packageName: 'my_design_system',
+  ),
+)
+```
+
+## Performance Comparison
+
+<CardGroup cols={2}>
+  <Card title="XML SVG" icon="file-code">
+    - **Size:** Larger (text format)
+    - **Load time:** Slower (needs parsing & compilation)
+    - **Best for:** Development, debugging
+    - **Human-readable:** Yes
+  </Card>
+  
+  <Card title="Binary Vector" icon="file-binary">
+    - **Size:** Smaller (binary format)
+    - **Load time:** Faster (pre-compiled)
+    - **Best for:** Production, release builds
+    - **Human-readable:** No
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Version control">
+    Commit only XML SVGs to your repository. Keep them in version control for easy editing.
+  </Step>
+  
+  <Step title="CI/CD compilation">
+    Compile SVGs to binary format in your CI/CD pipeline for release builds.
+  </Step>
+  
+  <Step title="Keep .svg extension">
+    Don't rename to `.svg.vec` - keep the `.svg` extension so your code works with both formats.
+  </Step>
+  
+  <Step title="Test both formats">
+    Verify that both XML and compiled formats work correctly during development.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### SVG not loading
+
+Make sure the asset is declared in `pubspec.yaml`:
+
+```yaml
+flutter:
+  assets:
+    - assets/images/logo.svg
+```
+
+### Compilation errors
+
+If SVG compilation fails, check that:
+- The SVG file is valid XML
+- You have the latest `vector_graphics_compiler`
+- The SVG doesn't use unsupported features
+
+### Wrong format detected
+
+The loader checks the first 100 characters. If your SVG has unusual encoding or starts with many comments, it might misdetect. Keep SVG files clean and standard.
+
+## Related Packages
+
+- [flutter_svg](https://pub.dev/packages/flutter_svg) - SVG rendering for Flutter
+- [vector_graphics](https://pub.dev/packages/vector_graphics) - Binary vector graphics format
+- [vector_graphics_compiler](https://pub.dev/packages/vector_graphics_compiler) - Compiler for SVG to binary
+- [flutter_gen](https://pub.dev/packages/flutter_gen) - Type-safe asset generation
+
+## Source Code
+
+View the source code on [GitHub](https://github.com/leancodepl/flutter_corelibrary/tree/master/packages/leancode_flutter_svg_adaptive_loader).

@@ -1,0 +1,490 @@
+---
+title: LeanCode Markup
+description: Parse and render text with custom BBCode-style tags in Flutter, supporting inline styling, custom widgets, and flexible tag definitions.
+---
+
+# LeanCode Markup
+
+A simple yet powerful package that allows you to parse text with predefined tags and render styled Flutter text. Perfect for user-generated content, localized strings with formatting, or any scenario where you need inline text styling.
+
+## Installation
+
+Add the package to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  leancode_markup: ^0.1.0
+```
+
+## Import
+
+```dart
+import 'package:leancode_markup/leancode_markup.dart';
+```
+
+## Core Concepts
+
+### Tag Syntax
+
+Markup uses BBCode-style tags:
+
+```
+[b]Bold text[/b]
+[i]Italic text[/i]
+[b][i]Bold and italic[/i][/b]
+```
+
+Tags can also have parameters:
+
+```
+[url="https://example.com"]Click here[/url]
+[color="#FF0000"]Red text[/color]
+```
+
+Escape tags using backslash:
+
+```
+This is \[not a tag\]
+```
+
+## Components
+
+### MarkupText
+
+The main widget for rendering markup text. Converts tagged strings into `Text.rich` with applied styles.
+
+```dart
+MarkupText(
+  '[b]Hello[/b] [i]World[/i]',
+  tagStyles: DefaultMarkupTheme.basicTags,
+)
+```
+
+### DefaultMarkupTheme
+
+Equivalent to `DefaultTextStyle`, but for markup tag styles. It applies tag styles to descendant `MarkupText` widgets.
+
+```dart
+DefaultMarkupTheme(
+  tagStyles: [
+    MarkupTagStyle.delegate(
+      tagName: 'b',
+      styleCreator: (_) => const TextStyle(fontWeight: FontWeight.bold),
+    ),
+    MarkupTagStyle.delegate(
+      tagName: 'i',
+      styleCreator: (_) => const TextStyle(fontStyle: FontStyle.italic),
+    ),
+  ],
+  child: MarkupText('[b]Styled[/b] [i]text[/i]'),
+)
+```
+
+### MarkupTagStyle
+
+Defines a custom tag and its corresponding style.
+
+```dart
+MarkupTagStyle.delegate(
+  tagName: 'highlight',
+  styleCreator: (_) => const TextStyle(
+    backgroundColor: Colors.yellow,
+    fontWeight: FontWeight.bold,
+  ),
+)
+```
+
+The `styleCreator` receives an optional `parameter` from the tag:
+
+```dart
+MarkupTagStyle.delegate(
+  tagName: 'color',
+  styleCreator: (parameter) => TextStyle(
+    color: Color(int.parse(parameter!.replaceFirst('#', '0xFF'))),
+  ),
+)
+
+// Usage: [color="#FF0000"]Red text[/color]
+```
+
+## Usage Examples
+
+### Basic Tags
+
+Use the predefined basic tags for common formatting:
+
+```dart
+MarkupText(
+  '[b]Bold[/b], [i]italic[/i], and [u]underlined[/u] text',
+  tagStyles: DefaultMarkupTheme.basicTags,
+)
+```
+
+<Note>
+**Basic tags include:**
+- `[b]` - Bold text
+- `[i]` - Italic text
+- `[u]` - Underlined text
+</Note>
+
+### Custom Tag Styles
+
+<Tabs>
+  <Tab title="Inline">
+    ```dart
+    MarkupText(
+      '[green]Success:[/green] Operation completed',
+      tagStyles: [
+        MarkupTagStyle.delegate(
+          tagName: 'green',
+          styleCreator: (_) => const TextStyle(color: Colors.green),
+        ),
+      ],
+    )
+    ```
+  </Tab>
+  
+  <Tab title="With Theme">
+    ```dart
+    DefaultMarkupTheme(
+      tagStyles: [
+        MarkupTagStyle.delegate(
+          tagName: 'success',
+          styleCreator: (_) => const TextStyle(
+            color: Colors.green,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        MarkupTagStyle.delegate(
+          tagName: 'error',
+          styleCreator: (_) => const TextStyle(
+            color: Colors.red,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+      child: Column(
+        children: [
+          MarkupText('[success]Upload complete[/success]'),
+          MarkupText('[error]Upload failed[/error]'),
+        ],
+      ),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Tag Factories (Widget Wrapping)
+
+Wrap tagged text in custom widgets using `MarkupTagSpanFactory`:
+
+```dart
+DefaultMarkupTheme(
+  tagStyles: [
+    MarkupTagStyle.delegate(
+      tagName: 'url',
+      styleCreator: (_) => const TextStyle(color: Colors.blue),
+    ),
+  ],
+  tagFactories: {
+    'url': (child, parameter) {
+      return WidgetSpan(
+        child: GestureDetector(
+          onTap: () => launchUrl(Uri.parse(parameter!)),
+          child: child,
+        ),
+      );
+    },
+  },
+  child: MarkupText(
+    '[url="https://leancode.co"]Visit LeanCode[/url]',
+  ),
+)
+```
+
+### Advanced Example: Complete Implementation
+
+```dart
+class StyledContentPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return DefaultMarkupTheme(
+      tagStyles: [
+        // Text styles
+        MarkupTagStyle.delegate(
+          tagName: 'b',
+          styleCreator: (_) => const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        MarkupTagStyle.delegate(
+          tagName: 'i',
+          styleCreator: (_) => const TextStyle(fontStyle: FontStyle.italic),
+        ),
+        MarkupTagStyle.delegate(
+          tagName: 'u',
+          styleCreator: (_) => const TextStyle(
+            decoration: TextDecoration.underline,
+          ),
+        ),
+        // Link style
+        MarkupTagStyle.delegate(
+          tagName: 'url',
+          styleCreator: (_) => const TextStyle(color: Colors.blue),
+        ),
+        // Highlight style
+        MarkupTagStyle.delegate(
+          tagName: 'highlight',
+          styleCreator: (_) => const TextStyle(
+            backgroundColor: Colors.yellow,
+          ),
+        ),
+      ],
+      tagFactories: {
+        // Clickable links
+        'url': (child, parameter) {
+          return WidgetSpan(
+            child: GestureDetector(
+              onTap: () async {
+                if (parameter != null &&
+                    await canLaunchUrl(Uri.parse(parameter))) {
+                  await launchUrl(Uri.parse(parameter));
+                }
+              },
+              child: child,
+            ),
+          );
+        },
+        // Superscript
+        'sup': (child, parameter) {
+          return WidgetSpan(
+            child: Transform.translate(
+              offset: const Offset(0, -4),
+              child: DefaultTextStyle(
+                style: const TextStyle(fontSize: 10),
+                child: child,
+              ),
+            ),
+          );
+        },
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MarkupText(
+            '[b]Welcome[/b] to our app!',
+          ),
+          MarkupText(
+            '[i]Learn more at[/i] [url="https://leancode.co"]leancode.co[/url]',
+          ),
+          MarkupText(
+            '[highlight]Special offer[/highlight] - 50% off!',
+          ),
+          MarkupText(
+            'E = mc[sup]2[/sup]',
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+## Advanced Features
+
+### Overwriting Parent Styles
+
+You can override styles from a parent `DefaultMarkupTheme`:
+
+```dart
+DefaultMarkupTheme(
+  tagStyles: DefaultMarkupTheme.basicTags,
+  child: MarkupText(
+    '[b]This is extra bold[/b]',
+    tagStyles: [
+      MarkupTagStyle.delegate(
+        tagName: 'b',
+        styleCreator: (_) => const TextStyle(fontWeight: FontWeight.w900),
+      ),
+    ],
+  ),
+)
+```
+
+### Nested Tags
+
+Tags can be nested for combined effects:
+
+```dart
+MarkupText(
+  '[b][i][u]Bold, italic, and underlined[/u][/i][/b]',
+  tagStyles: DefaultMarkupTheme.basicTags,
+)
+```
+
+### Escaping Tags
+
+Use backslash to escape tags:
+
+```dart
+MarkupText(
+  r'Use \[b] for bold and \[i] for italic',
+  tagStyles: DefaultMarkupTheme.basicTags,
+)
+```
+
+<Tip>
+Use raw strings (prefix with `r`) when you have many backslashes to avoid double-escaping.
+</Tip>
+
+### Logging Invalid Tags
+
+Enable logging to debug invalid tag usage:
+
+```dart
+DefaultMarkupTheme(
+  logger: Logger('MarkupLogger'),
+  tagStyles: DefaultMarkupTheme.basicTags,
+  child: MarkupText('[invalid]This tag doesn\'t exist[/invalid]'),
+)
+```
+
+## Common Use Cases
+
+<Steps>
+  <Step title="Localized strings with formatting">
+    ```dart
+    // In your translations file:
+    "welcome_message": "[b]Welcome[/b] to [i]MyApp[/i]!"
+    
+    // In your widget:
+    MarkupText(
+      AppLocalizations.of(context).welcomeMessage,
+      tagStyles: DefaultMarkupTheme.basicTags,
+    )
+    ```
+  </Step>
+  
+  <Step title="Rich user-generated content">
+    ```dart
+    MarkupText(
+      comment.content, // e.g., "Great [b]product[/b]!"
+      tagStyles: DefaultMarkupTheme.basicTags,
+    )
+    ```
+  </Step>
+  
+  <Step title="Terms and conditions with links">
+    ```dart
+    DefaultMarkupTheme(
+      tagStyles: [
+        MarkupTagStyle.delegate(
+          tagName: 'link',
+          styleCreator: (_) => TextStyle(color: Colors.blue),
+        ),
+      ],
+      tagFactories: {
+        'link': (child, url) => WidgetSpan(
+          child: GestureDetector(
+            onTap: () => launchUrl(Uri.parse(url!)),
+            child: child,
+          ),
+        ),
+      },
+      child: MarkupText(
+        'By continuing, you agree to our [link="/terms"]Terms[/link]',
+      ),
+    )
+    ```
+  </Step>
+  
+  <Step title="Formatted error messages">
+    ```dart
+    DefaultMarkupTheme(
+      tagStyles: [
+        MarkupTagStyle.delegate(
+          tagName: 'error',
+          styleCreator: (_) => TextStyle(
+            color: Colors.red,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        MarkupTagStyle.delegate(
+          tagName: 'field',
+          styleCreator: (_) => TextStyle(fontFamily: 'monospace'),
+        ),
+      ],
+      child: MarkupText(
+        '[error]Validation error:[/error] [field]email[/field] is required',
+      ),
+    )
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<Card title="Performance Tips" icon="bolt">
+  - Use `DefaultMarkupTheme` to avoid repeating tag styles
+  - Keep tag styles simple for better performance
+  - Avoid deeply nested tags when possible
+  - Cache `MarkupTagStyle` lists that are reused
+</Card>
+
+<Card title="Safety" icon="shield">
+  - Sanitize user input if allowing arbitrary markup
+  - Validate URLs before opening them in tag factories
+  - Use allowlists for allowed tags in user content
+</Card>
+
+## API Reference
+
+### MarkupText
+
+```dart
+MarkupText(
+  String text, {
+  List<MarkupTagStyle>? tagStyles,
+  TextStyle? style,
+  TextAlign? textAlign,
+  int? maxLines,
+  TextOverflow? overflow,
+})
+```
+
+### DefaultMarkupTheme
+
+```dart
+DefaultMarkupTheme({
+  required List<MarkupTagStyle> tagStyles,
+  Map<String, MarkupTagSpanFactory> tagFactories = const {},
+  Logger? logger,
+  required Widget child,
+})
+```
+
+### MarkupTagStyle
+
+```dart
+MarkupTagStyle.delegate({
+  required String tagName,
+  required TextStyle Function(String? parameter) styleCreator,
+})
+```
+
+### MarkupTagSpanFactory
+
+```dart
+typedef MarkupTagSpanFactory = WidgetSpan Function(
+  Widget child,
+  String? parameter,
+);
+```
+
+## Limitations
+
+- The Dart part of this package is agnostic to tag semantics (you define all tags)
+- Error reporting could be improved (see package TODOs)
+- Some style computations could be cached/precomputed for better performance
+
+## Source Code
+
+View the source code on [GitHub](https://github.com/leancodepl/flutter_corelibrary/tree/master/packages/leancode_markup).

@@ -1,0 +1,113 @@
+---
+title: Introduction to Flutter CoreLibrary
+description: A comprehensive collection of production-ready Flutter packages built by LeanCode for enterprise applications
+---
+
+Flutter CoreLibrary is a curated collection of high-quality, production-ready packages maintained by LeanCode. These packages are battle-tested in apps with millions of users and provide essential functionality for building robust Flutter applications.
+
+## What is Flutter CoreLibrary?
+
+Flutter CoreLibrary brings together a suite of packages that solve common challenges in Flutter development. Each package is designed to work seamlessly with modern Flutter applications while maintaining high code quality standards.
+
+The library includes packages for:
+
+<CardGroup cols={2}>
+  <Card title="CQRS Communication" icon="arrows-left-right">
+    Communicate with CQRS-compatible backends using queries and commands
+  </Card>
+  <Card title="UI Components" icon="palette">
+    Enhanced gradients with HCT color interpolation and markup text rendering
+  </Card>
+  <Card title="Authentication" icon="lock">
+    OAuth2-compliant login client with automatic token refresh
+  </Card>
+  <Card title="Development Tools" icon="wrench">
+    Debug pages, lint rules, and hooks for better developer experience
+  </Card>
+</CardGroup>
+
+## Key packages
+
+Here are some of the core packages available in the Flutter CoreLibrary:
+
+### cqrs
+
+A library for convenient communication with CQRS-compatible backends, using queries and commands. Perfect for apps that follow the Command Query Responsibility Segregation pattern.
+
+**Key features:**
+- Type-safe query and command execution
+- Built-in error handling with validation support
+- Seamless integration with HTTP clients
+
+### leancode_lint
+
+An opinionated set of high-quality, robust, and up-to-date lint rules used at LeanCode. Helps you maintain code quality and consistency across your Flutter projects.
+
+**Key features:**
+- Custom lint rules for Flutter best practices
+- Configurable analyzer plugin
+- Code assists for common refactorings
+
+### leancode_hooks
+
+A collection of commonly used hooks gathered in one place for better discoverability and consistent versioning. Built on top of `flutter_hooks`.
+
+**Key features:**
+- `useBloc`, `useBlocListener`, `useBlocState` for BLoC integration
+- `useDebounce` and `useThrottle` for performance optimization
+- `useFocused` and `usePostFrameEffect` for widget lifecycle management
+
+### enhanced_gradients
+
+Flutter gradient wrappers that interpolate colors in the HCT color system, providing smoother and more natural color transitions.
+
+**Key features:**
+- Enhanced versions of `LinearGradient`, `RadialGradient`, and `SweepGradient`
+- `HctColorTween` for animations
+- Better color interpolation than standard RGB
+
+### login_client
+
+OAuth2-compliant login client that stores credentials for the currently authenticated user and automatically refreshes tokens.
+
+**Key features:**
+- Automatic token refresh
+- Secure credential storage
+- OAuth2 standard compliance
+
+### leancode_debug_page
+
+A debug page that gathers HTTP requests and logger logs with filtering, search, and sharing capabilities.
+
+**Key features:**
+- Request and response inspection
+- Log level filtering
+- Draggable FAB and shake gesture entry points
+- Share individual items or full logs
+
+## Why choose Flutter CoreLibrary?
+
+<Note>
+  Flutter CoreLibrary packages are production-ready and used in apps with millions of users.
+</Note>
+
+Flutter CoreLibrary packages are built by LeanCode, top-tier Flutter experts and creators of [Patrol](https://patrol.leancode.co/), the next-gen testing framework for Flutter.
+
+**Benefits:**
+
+- **Production-Ready**: All packages are battle-tested in real-world applications with millions of users
+- **High Quality**: Maintained with strict lint rules and comprehensive testing
+- **Consistent**: Packages follow the same design principles and coding standards
+- **Well-Documented**: Each package includes detailed documentation and examples
+- **Actively Maintained**: Regular updates and improvements from the LeanCode team
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Learn how to add Flutter CoreLibrary packages to your project
+  </Card>
+  <Card title="Core Packages" icon="cube" href="/packages/cqrs">
+    Explore CQRS, authentication, and other core packages
+  </Card>
+</CardGroup>

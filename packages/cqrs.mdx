@@ -1,0 +1,538 @@
+---
+title: CQRS
+description: A library for convenient communication with CQRS-compatible backends using queries and commands
+---
+
+The `cqrs` package provides a robust implementation for communicating with CQRS (Command Query Responsibility Segregation) compatible backends. It offers type-safe query and command execution with built-in error handling, validation, and middleware support.
+
+## Installation
+
+Add the package to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  cqrs: ^10.1.0
+```
+
+## Overview
+
+The CQRS package enables you to:
+
+- Execute type-safe queries to fetch data from your backend
+- Run commands to perform actions on your backend
+- Handle validation errors with detailed error information
+- Add middleware for global result handling
+- Automatically handle authentication and authorization errors
+
+## Core Concepts
+
+### Queries
+
+Queries are used to fetch data from your backend. They implement the `Query<T>` interface where `T` is the return type.
+
+```dart
+class AllFlowers implements Query<List<Flower>> {
+  const AllFlowers({required this.page});
+
+  final int page;
+
+  @override
+  String getFullName() => 'AllFlowers';
+
+  @override
+  List<Flower> resultFactory(dynamic json) {
+    return List<Flower>.of(json as List).map(Flower.fromJson).toList();
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {'page': page};
+}
+```
+
+### Commands
+
+Commands carry data related to performing actions on the backend. They implement the `Command` interface.
+
+```dart
+class AddFlower implements Command {
+  const AddFlower({
+    required this.name,
+    required this.pretty,
+  });
+
+  final String name;
+  final bool pretty;
+
+  @override
+  String getFullName() => 'AddFlower';
+
+  @override
+  Map<String, dynamic> toJson() => {'Name': name, 'Pretty': pretty};
+}
+```
+
+### Operations
+
+Operations combine query and command behaviors, allowing you to perform actions and receive results.
+
+```dart
+abstract interface class Operation<T> extends CqrsMethod {
+  T resultFactory(dynamic json);
+}
+```
+
+## Getting Started
+
+<Steps>
+  <Step title="Create API URI">
+    Define the base URI for your CQRS backend. Make sure to include the trailing slash to ensure resolved paths are valid.
+
+    ```dart
+    final apiUri = Uri.parse('https://flowers.garden/api/');
+    ```
+  </Step>
+
+  <Step title="Initialize CQRS Client">
+    Create a `Cqrs` instance with an HTTP client (typically one that handles authentication) and your API URI.
+
+    ```dart
+    final cqrs = Cqrs(
+      loginClient,  // HTTP client that handles auth
+      apiUri,
+      timeout: const Duration(seconds: 30),
+      headers: {'Custom-Header': 'value'},
+    );
+    ```
+  </Step>
+
+  <Step title="Execute Queries and Commands">
+    Use the `get()` method for queries and `run()` method for commands.
+
+    ```dart
+    // Execute a query
+    final result = await cqrs.get(AllFlowers(page: 1));
+
+    // Execute a command
+    final commandResult = await cqrs.run(
+      AddFlower(name: 'Daisy', pretty: true),
+    );
+    ```
+  </Step>
+</Steps>
+
+## API Reference
+
+### Cqrs Class
+
+The main class for communicating with CQRS backends.
+
+#### Constructor
+
+```dart
+Cqrs(
+  http.Client client,
+  Uri apiUri, {
+  Duration timeout = const Duration(seconds: 30),
+  Map<String, String> headers = const {},
+  Logger? logger,
+  List<CqrsMiddleware> middlewares = const [],
+})
+```
+
+<ParamField path="client" type="http.Client" required>
+  The HTTP client used for sending requests. Should handle authentication and token renewal.
+</ParamField>
+
+<ParamField path="apiUri" type="Uri" required>
+  The base URI for the CQRS API. Include the trailing slash for correct path resolution.
+</ParamField>
+
+<ParamField path="timeout" type="Duration" default="30 seconds">
+  Request timeout duration.
+</ParamField>
+
+<ParamField path="headers" type="Map<String, String>" default="{}">
+  Global headers added to all requests. Can be overridden per request.
+</ParamField>
+
+<ParamField path="logger" type="Logger?">
+  Optional logger for debugging CQRS operations.
+</ParamField>
+
+<ParamField path="middlewares" type="List<CqrsMiddleware>" default="[]">
+  List of middleware for global result handling.
+</ParamField>
+
+#### Methods
+
+##### get
+
+Execute a query and receive typed results.
+
+```dart
+Future<QueryResult<T>> get<T>(
+  Query<T> query, {
+  Map<String, String> headers = const {},
+})
+```
+
+##### run
+
+Execute a command and receive execution results.
+
+```dart
+Future<CommandResult> run(
+  Command command, {
+  Map<String, String> headers = const {},
+})
+```
+
+##### perform
+
+Execute an operation and receive typed results.
+
+```dart
+Future<OperationResult<T>> perform<T>(
+  Operation<T> operation, {
+  Map<String, String> headers = const {},
+})
+```
+
+##### addMiddleware / removeMiddleware
+
+Manage middleware for global result handling.
+
+```dart
+void addMiddleware(CqrsMiddleware middleware)
+void removeMiddleware(CqrsMiddleware middleware)
+```
+
+## Handling Results
+
+### Query Results
+
+Query results can be either `QuerySuccess` or `QueryFailure`.
+
+<CodeGroup>
+```dart Pattern Matching
+final result = await cqrs.get(AllFlowers(page: 1));
+
+if (result case QuerySuccess(:final data)) {
+  print('Received ${data.length} flowers');
+  displayFlowers(data);
+} else if (result case QueryFailure(:final error)) {
+  print('Query failed with error: $error');
+  handleError(error);
+}
+```
+
+```dart Type Checking
+final result = await cqrs.get(AllFlowers(page: 1));
+
+if (result.isSuccess) {
+  final flowers = (result as QuerySuccess<List<Flower>>).data;
+  displayFlowers(flowers);
+} else {
+  final error = (result as QueryFailure).error;
+  handleError(error);
+}
+```
+</CodeGroup>
+
+#### QueryError Types
+
+<Accordion title="network">
+  Represents a network or socket error. The backend is unreachable.
+</Accordion>
+
+<Accordion title="authentication">
+  Represents an authentication error (HTTP 401). The user needs to log in.
+</Accordion>
+
+<Accordion title="authorization">
+  Represents an authorization error (HTTP 403). The user lacks permissions.
+</Accordion>
+
+<Accordion title="unknown">
+  Represents a generic error covering all other error cases.
+</Accordion>
+
+### Command Results
+
+Command results can be either `CommandSuccess` or `CommandFailure`.
+
+<CodeGroup>
+```dart Pattern Matching
+final result = await cqrs.run(AddFlower(name: 'Daisy', pretty: true));
+
+if (result case CommandSuccess()) {
+  print('Flower added successfully!');
+} else if (result case CommandFailure(isInvalid: true, :final validationErrors)) {
+  print('Validation errors occurred:');
+  for (final error in validationErrors) {
+    print('${error.propertyName}: ${error.message}');
+  }
+} else if (result case CommandFailure(:final error)) {
+  print('Command failed with error: $error');
+}
+```
+
+```dart Manual Checking
+final result = await cqrs.run(AddFlower(name: 'Daisy', pretty: true));
+
+if (result.isSuccess) {
+  print('Flower added successfully!');
+} else if (result.isInvalid) {
+  final failure = result as CommandFailure;
+  handleValidationErrors(failure.validationErrors);
+} else {
+  final failure = result as CommandFailure;
+  handleError(failure.error);
+}
+```
+</CodeGroup>
+
+#### CommandError Types
+
+- `network` - Network or socket error
+- `authentication` - Authentication error (HTTP 401)
+- `authorization` - Authorization error (HTTP 403)
+- `validation` - Validation error (HTTP 422) with detailed validation errors
+- `unknown` - Generic error for all other cases
+
+### Validation Errors
+
+Validation errors provide detailed information about what went wrong.
+
+```dart
+class ValidationError {
+  final int code;              // Error code
+  final String message;        // Human-readable message
+  final String propertyName;   // Property that caused the error
+}
+```
+
+**Check for specific errors:**
+
+```dart
+if (result case CommandFailure(:final validationErrors)) {
+  // Check if a specific error code exists
+  if (validationErrors.any((e) => e.code == 1001)) {
+    print('Name is required');
+  }
+
+  // Or use the helper method
+  if ((result as CommandFailure).hasError(1001)) {
+    print('Name is required');
+  }
+
+  // Check for property-specific error
+  if ((result as CommandFailure).hasErrorForProperty(1001, 'Name')) {
+    print('Name field has validation error 1001');
+  }
+}
+```
+
+## Middleware
+
+Middleware allows you to implement global result handling, such as showing notifications or logging out users.
+
+```dart
+class ErrorHandlingMiddleware extends CqrsMiddleware {
+  const ErrorHandlingMiddleware();
+
+  @override
+  Future<QueryResult<T>> handleQueryResult<T>(QueryResult<T> result) async {
+    if (result case QueryFailure(error: QueryError.authentication)) {
+      // Log out user on authentication error
+      await authService.logOut();
+    }
+    return result;
+  }
+
+  @override
+  Future<CommandResult> handleCommandResult(CommandResult result) async {
+    if (result case CommandFailure(error: CommandError.network)) {
+      // Show network error message
+      showSnackbar('Network error occurred');
+    }
+    return result;
+  }
+}
+
+// Add middleware during initialization
+final cqrs = Cqrs(
+  loginClient,
+  apiUri,
+  middlewares: [ErrorHandlingMiddleware()],
+);
+
+// Or add/remove dynamically
+cqrs.addMiddleware(LoggingMiddleware());
+cqrs.removeMiddleware(errorMiddleware);
+```
+
+## Advanced Usage
+
+### Custom Headers per Request
+
+You can override global headers or add request-specific headers:
+
+```dart
+final result = await cqrs.get(
+  AllFlowers(page: 1),
+  headers: {'X-Custom-Header': 'value'},
+);
+```
+
+<Note>
+  The `Content-Type` header is always set to `application/json` and cannot be overridden.
+</Note>
+
+### Accessing Raw Response Body
+
+For queries, you can access the raw JSON response:
+
+```dart
+if (result case QuerySuccess(:final data, :final rawBody)) {
+  print('Raw JSON: $rawBody');
+  processData(data);
+}
+```
+
+### Logging
+
+Enable logging to debug CQRS operations:
+
+```dart
+import 'package:logging/logging.dart';
+
+final logger = Logger('CQRS');
+logger.level = Level.ALL;
+logger.onRecord.listen((record) {
+  print('${record.level.name}: ${record.message}');
+});
+
+final cqrs = Cqrs(
+  loginClient,
+  apiUri,
+  logger: logger,
+);
+```
+
+Logging includes:
+- Successful query/command execution
+- Validation errors with details
+- Network errors with stack traces
+- Authentication/authorization errors
+
+## Integration with ContractsGenerator
+
+The CQRS package works seamlessly with code generation tools:
+
+<Card title="LeanCode ContractsGenerator" icon="code" href="https://github.com/leancodepl/contractsgenerator">
+  Automatically generate Dart contracts from C# CQRS definitions.
+</Card>
+
+<Card title="ContractsGenerator Dart" icon="code" href="https://github.com/leancodepl/contractsgenerator-dart">
+  Dart-specific contract generator for CQRS.
+</Card>
+
+## Complete Example
+
+```dart
+import 'package:cqrs/cqrs.dart';
+import 'package:http/http.dart' as http;
+
+// Define your data models
+class Flower {
+  const Flower(this.name, this.pretty);
+
+  final String name;
+  final bool pretty;
+
+  factory Flower.fromJson(Map<String, dynamic> json) => Flower(
+    json['name'] as String,
+    json['pretty'] as bool,
+  );
+}
+
+// Define a query
+class AllFlowers implements Query<List<Flower>> {
+  const AllFlowers({required this.page});
+
+  final int page;
+
+  @override
+  String getFullName() => 'AllFlowers';
+
+  @override
+  List<Flower> resultFactory(dynamic json) {
+    return (json as List)
+        .map((item) => Flower.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {'page': page};
+}
+
+// Define a command
+class AddFlower implements Command {
+  const AddFlower({required this.name, required this.pretty});
+
+  final String name;
+  final bool pretty;
+
+  @override
+  String getFullName() => 'AddFlower';
+
+  @override
+  Map<String, dynamic> toJson() => {'Name': name, 'Pretty': pretty};
+}
+
+void main() async {
+  // Setup
+  final apiUri = Uri.parse('https://flowers.garden/api/');
+  final client = http.Client();
+  final cqrs = Cqrs(client, apiUri);
+
+  // Execute query
+  final queryResult = await cqrs.get(AllFlowers(page: 1));
+  if (queryResult case QuerySuccess(:final data)) {
+    print('Found ${data.length} flowers');
+    for (final flower in data) {
+      print('${flower.name} - pretty: ${flower.pretty}');
+    }
+  }
+
+  // Execute command
+  final commandResult = await cqrs.run(
+    AddFlower(name: 'Daisy', pretty: true),
+  );
+
+  if (commandResult case CommandSuccess()) {
+    print('Successfully added a daisy!');
+  } else if (commandResult case CommandFailure(:final validationErrors)) {
+    print('Validation failed:');
+    for (final error in validationErrors) {
+      print('[${error.propertyName}] ${error.message}');
+    }
+  }
+}
+```
+
+## Related Packages
+
+<CardGroup cols={2}>
+  <Card title="login_client" icon="key" href="/packages/login-client">
+    OAuth2 client for handling authentication
+  </Card>
+  <Card title="login_client_flutter" icon="mobile" href="/packages/login-client-flutter">
+    Flutter-specific credentials storage
+  </Card>
+</CardGroup>
+
+<Warning>
+  Always ensure your API URI ends with a trailing slash (`/`) to prevent path resolution issues.
+</Warning>

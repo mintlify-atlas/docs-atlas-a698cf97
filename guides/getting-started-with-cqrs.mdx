@@ -1,0 +1,519 @@
+---
+title: Getting Started with CQRS
+description: A comprehensive guide to using the CQRS package for backend communication with queries and commands
+---
+
+The CQRS package provides a convenient way to communicate with CQRS-compatible backends using queries and commands. This guide will walk you through setting up and using CQRS in your Flutter application.
+
+## What is CQRS?
+
+CQRS (Command Query Responsibility Segregation) is a pattern that separates read operations (queries) from write operations (commands). The CQRS package makes it easy to:
+
+- Execute queries to fetch data from your backend
+- Run commands to perform actions and modify data
+- Handle validation errors and command results
+- Manage authentication with automatic token refresh
+
+## Installation
+
+<Steps>
+  <Step title="Add the dependency">
+    Add `cqrs` to your `pubspec.yaml`:
+
+    ```bash
+    flutter pub add cqrs
+    ```
+  </Step>
+
+  <Step title="Import the package">
+    ```dart
+    import 'package:cqrs/cqrs.dart';
+    ```
+  </Step>
+</Steps>
+
+## Setting Up CQRS
+
+### Initialize the CQRS Client
+
+First, create a CQRS instance with your API endpoint and an HTTP client that handles authentication:
+
+```dart
+import 'package:cqrs/cqrs.dart';
+import 'package:login_client/login_client.dart';
+
+// Create your API URI with a trailing slash
+final apiUri = Uri.parse('https://api.example.com/api/');
+
+// Set up LoginClient for authentication (see Authentication Setup guide)
+final loginClient = LoginClient(
+  oAuthSettings: OAuthSettings(
+    authorizationUri: apiUri.resolve('/auth'),
+    clientId: 'your_client_id',
+  ),
+  credentialsStorage: const FlutterSecureCredentialsStorage(),
+);
+
+// Initialize CQRS with the authenticated client
+final cqrs = Cqrs(
+  loginClient,
+  apiUri,
+  timeout: const Duration(seconds: 30),
+  headers: {'Content-Type': 'application/json'},
+);
+```
+
+<Note>
+  Make sure your API URI includes the trailing slash to ensure requests are sent to the correct endpoints.
+</Note>
+
+## Creating Queries
+
+Queries are used to fetch data from your backend. Implement the `Query<T>` interface where `T` is the type of data you expect to receive.
+
+### Basic Query Example
+
+```dart
+class AllFlowers implements Query<List<Flower>> {
+  const AllFlowers({required this.page});
+
+  final int page;
+
+  @override
+  String getFullName() => 'AllFlowers';
+
+  @override
+  List<Flower> resultFactory(dynamic json) {
+    return (json as List)
+        .map((item) => Flower.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {'page': page};
+}
+
+class Flower {
+  const Flower({
+    required this.id,
+    required this.name,
+    required this.isPretty,
+  });
+
+  final String id;
+  final String name;
+  final bool isPretty;
+
+  factory Flower.fromJson(Map<String, dynamic> json) {
+    return Flower(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      isPretty: json['isPretty'] as bool,
+    );
+  }
+}
+```
+
+### Executing Queries
+
+Use the `get()` method to execute a query:
+
+```dart
+final result = await cqrs.get(AllFlowers(page: 1));
+
+if (result case QuerySuccess(:final data)) {
+  // Handle successful query
+  print('Fetched ${data.length} flowers');
+  for (final flower in data) {
+    print('${flower.name} - Pretty: ${flower.isPretty}');
+  }
+} else if (result case QueryFailure(:final error)) {
+  // Handle error
+  print('Query failed: $error');
+}
+```
+
+<Tip>
+  The `QueryResult` uses pattern matching for clean error handling. You can check `result.isSuccess` or `result.isFailure` for boolean checks.
+</Tip>
+
+## Creating Commands
+
+Commands are used to perform actions that modify data on your backend. Implement the `Command` interface.
+
+### Basic Command Example
+
+```dart
+class AddFlower implements Command {
+  const AddFlower({
+    required this.name,
+    required this.pretty,
+  });
+
+  final String name;
+  final bool pretty;
+
+  @override
+  String getFullName() => 'AddFlower';
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'Name': name,
+    'Pretty': pretty,
+  };
+}
+```
+
+### Executing Commands
+
+Use the `run()` method to execute a command:
+
+```dart
+final result = await cqrs.run(
+  AddFlower(
+    name: 'Daisy',
+    pretty: true,
+  ),
+);
+
+if (result case CommandSuccess()) {
+  print('Flower added successfully!');
+} else if (result case CommandFailure(isInvalid: true, :final validationErrors)) {
+  print('Validation errors occurred:');
+  for (final error in validationErrors) {
+    print('  - ${error.propertyName}: ${error.message} (code: ${error.code})');
+  }
+} else if (result case CommandFailure(:final error)) {
+  print('Command failed: $error');
+}
+```
+
+## Handling Results
+
+### Query Results
+
+Query results return a `QueryResult<T>` which can be either:
+
+<Tabs>
+  <Tab title="QuerySuccess">
+    ```dart
+    final result = await cqrs.get(AllFlowers(page: 1));
+    
+    if (result case QuerySuccess(:final data, :final rawBody)) {
+      // Access the deserialized data
+      print(data);
+      
+      // Access the raw response body if needed
+      print(rawBody);
+    }
+    ```
+  </Tab>
+  
+  <Tab title="QueryFailure">
+    ```dart
+    if (result case QueryFailure(:final error)) {
+      switch (error) {
+        case QueryError.network:
+          print('Network error occurred');
+        case QueryError.authentication:
+          print('Authentication failed');
+        case QueryError.authorization:
+          print('Not authorized');
+        case QueryError.jsonDeserialization:
+          print('Failed to parse response');
+        case QueryError.unknown:
+          print('Unknown error');
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Command Results
+
+Command results return a `CommandResult` which can be either:
+
+<Tabs>
+  <Tab title="CommandSuccess">
+    ```dart
+    final result = await cqrs.run(AddFlower(name: 'Rose', pretty: true));
+    
+    if (result.isSuccess) {
+      // Command executed successfully
+      showSuccessMessage();
+    }
+    ```
+  </Tab>
+  
+  <Tab title="CommandFailure">
+    ```dart
+    if (result case CommandFailure(:final error, :final validationErrors)) {
+      // Check if it's a validation error
+      if (result.isInvalid) {
+        // Handle validation errors
+        for (final validationError in validationErrors) {
+          print('${validationError.propertyName}: ${validationError.message}');
+        }
+      }
+      
+      // Check for specific error codes
+      if (result.hasError(1001)) {
+        print('Error code 1001 found');
+      }
+      
+      // Check for property-specific errors
+      if (result.hasErrorForProperty(1002, 'Name')) {
+        print('Name field has error 1002');
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Advanced Features
+
+### Using Middleware
+
+Middleware allows you to intercept and handle all CQRS results globally:
+
+```dart
+class LoggingMiddleware implements CqrsMiddleware {
+  @override
+  void handleQueryResult(QueryResult result) {
+    if (result.isFailure) {
+      logger.error('Query failed: $result');
+    }
+  }
+
+  @override
+  void handleCommandResult(CommandResult result) {
+    if (result.isFailure) {
+      logger.error('Command failed: $result');
+    }
+  }
+}
+
+// Add middleware during initialization
+final cqrs = Cqrs(
+  loginClient,
+  apiUri,
+  middlewares: [LoggingMiddleware()],
+);
+
+// Or add/remove middleware dynamically
+cqrs.addMiddleware(LoggingMiddleware());
+cqrs.removeMiddleware(middlewareInstance);
+```
+
+### Custom Headers and Timeout
+
+You can customize headers and timeout for individual requests:
+
+```dart
+// Custom headers for a specific query
+final result = await cqrs.get(
+  AllFlowers(page: 1),
+  headers: {'X-Custom-Header': 'value'},
+);
+
+// Custom timeout (overrides the global timeout)
+final cqrsWithTimeout = Cqrs(
+  loginClient,
+  apiUri,
+  timeout: const Duration(seconds: 60),
+);
+```
+
+### Operations (Query + Command)
+
+For operations that both query and modify data, use the `Operation<T>` interface:
+
+```dart
+class UpdateAndGetFlower implements Operation<Flower> {
+  const UpdateAndGetFlower({required this.id, required this.name});
+
+  final String id;
+  final String name;
+
+  @override
+  String getFullName() => 'UpdateAndGetFlower';
+
+  @override
+  Flower resultFactory(dynamic json) {
+    return Flower.fromJson(json as Map<String, dynamic>);
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+}
+
+// Execute the operation
+final result = await cqrs.execute(UpdateAndGetFlower(id: '123', name: 'Tulip'));
+
+if (result case OperationSuccess(:final data)) {
+  print('Updated flower: ${data.name}');
+}
+```
+
+## Best Practices
+
+<Accordion title="Use json_serializable for complex models">
+  For production apps, use `json_serializable` to generate serialization code automatically:
+
+  ```dart
+  import 'package:json_annotation/json_annotation.dart';
+
+  part 'flower.g.dart';
+
+  @JsonSerializable()
+  class Flower {
+    const Flower({
+      required this.id,
+      required this.name,
+      required this.isPretty,
+    });
+
+    final String id;
+    final String name;
+    final bool isPretty;
+
+    factory Flower.fromJson(Map<String, dynamic> json) => _$FlowerFromJson(json);
+    Map<String, dynamic> toJson() => _$FlowerToJson(this);
+  }
+  ```
+</Accordion>
+
+<Accordion title="Centralize error handling with middleware">
+  Create a global error handler to show user-friendly messages:
+
+  ```dart
+  class ErrorHandlingMiddleware implements CqrsMiddleware {
+    final SnackbarService snackbar;
+
+    ErrorHandlingMiddleware(this.snackbar);
+
+    @override
+    void handleQueryResult(QueryResult result) {
+      if (result case QueryFailure(error: QueryError.network)) {
+        snackbar.show('Network connection failed');
+      } else if (result case QueryFailure(error: QueryError.authentication)) {
+        navigateToLogin();
+      }
+    }
+
+    @override
+    void handleCommandResult(CommandResult result) {
+      if (result.isInvalid) {
+        snackbar.show('Please check your input');
+      }
+    }
+  }
+  ```
+</Accordion>
+
+<Accordion title="Use const constructors for queries and commands">
+  Make your queries and commands const for better performance:
+
+  ```dart
+  class AllFlowers implements Query<List<Flower>> {
+    const AllFlowers({required this.page}); // const constructor
+
+    final int page;
+    // ...
+  }
+  ```
+</Accordion>
+
+<Warning>
+  Always ensure your API URI ends with a trailing slash (`/api/`) to prevent URL resolution issues.
+</Warning>
+
+## Common Use Cases
+
+### Pagination
+
+```dart
+class PaginatedFlowers implements Query<PaginatedResult<Flower>> {
+  const PaginatedFlowers({required this.page, required this.pageSize});
+
+  final int page;
+  final int pageSize;
+
+  @override
+  String getFullName() => 'PaginatedFlowers';
+
+  @override
+  PaginatedResult<Flower> resultFactory(dynamic json) {
+    final data = json as Map<String, dynamic>;
+    return PaginatedResult(
+      items: (data['items'] as List)
+          .map((item) => Flower.fromJson(item))
+          .toList(),
+      totalCount: data['totalCount'] as int,
+      page: data['page'] as int,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {'page': page, 'pageSize': pageSize};
+}
+```
+
+### Form Submission with Validation
+
+```dart
+Future<void> submitForm(String name, bool isPretty) async {
+  final result = await cqrs.run(
+    AddFlower(name: name, pretty: isPretty),
+  );
+
+  if (result.isSuccess) {
+    navigateToSuccess();
+  } else if (result.isInvalid) {
+    // Show validation errors next to form fields
+    final errors = (result as CommandFailure).validationErrors;
+    
+    for (final error in errors) {
+      if (error.propertyName == 'Name') {
+        nameFieldController.error = error.message;
+      }
+    }
+  } else {
+    showErrorDialog('Failed to add flower');
+  }
+}
+```
+
+### Retry Logic
+
+```dart
+Future<QueryResult<T>> retryQuery<T>(
+  Query<T> query, {
+  int maxAttempts = 3,
+}) async {
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    final result = await cqrs.get(query);
+    
+    if (result.isSuccess) {
+      return result;
+    }
+    
+    if (result case QueryFailure(error: QueryError.network)) {
+      if (attempt < maxAttempts) {
+        await Future.delayed(Duration(seconds: attempt));
+        continue;
+      }
+    }
+    
+    return result;
+  }
+  
+  throw Exception('Max retry attempts exceeded');
+}
+```
+
+## Next Steps
+
+- Set up authentication with [LoginClient](/guides/authentication-setup)
+- Learn about [CQRS middleware](https://github.com/leancodepl/flutter_corelibrary/tree/master/packages/cqrs) for advanced use cases
+- Use [ContractsGenerator](https://github.com/leancodepl/contractsgenerator) to auto-generate queries and commands from your C# backend

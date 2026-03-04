@@ -1,0 +1,379 @@
+---
+title: Override API Endpoint
+description: Override and persist API endpoints for testing and development using deeplinks, without recompiling your Flutter application.
+---
+
+# Override API Endpoint
+
+This package allows backend developers and QA teams to override API endpoints for local testing or staging environments without recompiling the app. The endpoint is persisted using `shared_preferences` and can be changed dynamically via deeplinks.
+
+## Use Case
+
+Perfect for scenarios where you need to:
+
+- Test against a local backend server during development
+- Switch between staging and production environments
+- Point to different API servers without rebuilding the app
+- Enable QA teams to test against specific backend instances
+
+## Installation
+
+Add `override_api_endpoint` to your `pubspec.yaml`:
+
+```bash
+flutter pub add override_api_endpoint
+flutter pub add shared_preferences
+```
+
+<Note>
+  You'll also need a deeplink handling package like `uni_links` or `app_links` to receive the override deeplinks.
+</Note>
+
+## How It Works
+
+<Steps>
+  <Step title="Default Endpoint">
+    The app starts with a default API endpoint defined in code.
+  </Step>
+
+  <Step title="Deeplink Override">
+    Send a specially formatted deeplink to the app with the new endpoint URL.
+  </Step>
+
+  <Step title="Persistence">
+    The new endpoint is stored in `SharedPreferences` and persists across app restarts.
+  </Step>
+
+  <Step title="Auto-Load">
+    On subsequent launches, the persisted endpoint is automatically loaded.
+  </Step>
+</Steps>
+
+## Basic Usage
+
+```dart
+import 'package:override_api_endpoint/override_api_endpoint.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uni_links/uni_links.dart';
+
+final apiEndpoint = await overrideApiEndpoint(
+  sharedPreferences: await SharedPreferences.getInstance(),
+  getInitialUri: getInitialUri,
+  deeplinkOverrideSegment: 'override',
+  deeplinkQueryParameter: 'apiAddress',
+  defaultEndpoint: Uri.parse('https://api.example.com'),
+);
+
+print('Using API endpoint: $apiEndpoint');
+```
+
+## Configuration
+
+### Function Parameters
+
+<Card title="overrideApiEndpoint Parameters" icon="gear">
+  ```dart
+  Future<Uri> overrideApiEndpoint({
+    required SharedPreferences sharedPreferences,
+    required FutureOr<Uri?> Function() getInitialUri,
+    required String deeplinkOverrideSegment,
+    required String deeplinkQueryParameter,
+    required Uri defaultEndpoint,
+    String apiEndpointKey = 'apiAddress',
+  })
+  ```
+
+  **Parameters:**
+
+  - `sharedPreferences`: Instance of `SharedPreferences` for storing the endpoint
+  - `getInitialUri`: Function that returns the initial deeplink URI (e.g., from `uni_links`)
+  - `deeplinkOverrideSegment`: Path segment that identifies the override deeplink (e.g., `'override'`)
+  - `deeplinkQueryParameter`: Query parameter name containing the new endpoint (e.g., `'apiAddress'`)
+  - `defaultEndpoint`: Fallback endpoint used when no override is set
+  - `apiEndpointKey`: SharedPreferences key for storing the endpoint (default: `'apiAddress'`)
+</Card>
+
+### Deeplink Format
+
+The deeplink should follow this pattern:
+
+```
+{scheme}://{host}/{deeplinkOverrideSegment}?{deeplinkQueryParameter}={url_encoded_endpoint}
+```
+
+**Example:**
+```
+app://app/override?apiAddress=https%3A%2F%2Fapi.staging.example.com
+```
+
+- **Scheme:** `app://`
+- **Host:** `app`
+- **Override segment:** `override`
+- **Query parameter:** `apiAddress`
+- **Encoded endpoint:** `https%3A%2F%2Fapi.staging.example.com` (URL-encoded)
+
+## Complete Example
+
+<CodeGroup>
+```dart main.dart
+import 'package:flutter/material.dart';
+import 'package:override_api_endpoint/override_api_endpoint.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uni_links/uni_links.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Get the API endpoint (may be overridden via deeplink)
+  final apiEndpoint = await overrideApiEndpoint(
+    sharedPreferences: await SharedPreferences.getInstance(),
+    getInitialUri: getInitialUri,
+    deeplinkOverrideSegment: 'override',
+    deeplinkQueryParameter: 'apiAddress',
+    defaultEndpoint: Uri.parse('https://api.production.example.com'),
+  );
+
+  runApp(MyApp(apiEndpoint: apiEndpoint));
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key, required this.apiEndpoint});
+
+  final Uri apiEndpoint;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: const Text('API Override Example')),
+        body: Center(
+          child: Text('Using endpoint: $apiEndpoint'),
+        ),
+      ),
+    );
+  }
+}
+```
+
+```yaml android/app/src/main/AndroidManifest.xml
+<activity
+    android:name=".MainActivity"
+    android:launchMode="singleTask">
+    <!-- Deep Links -->
+    <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data
+            android:scheme="app"
+            android:host="app" />
+    </intent-filter>
+</activity>
+```
+
+```xml ios/Runner/Info.plist
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleTypeRole</key>
+        <string>Editor</string>
+        <key>CFBundleURLName</key>
+        <string>app</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>app</string>
+        </array>
+    </dict>
+</array>
+```
+</CodeGroup>
+
+## Testing the Override
+
+### Using ADB (Android)
+
+```bash
+# Override to local server
+adb shell am start -W -a android.intent.action.VIEW \
+  -d "app://app/override?apiAddress=http%3A%2F%2F10.0.2.2%3A8080" \
+  com.example.app
+
+# Override to staging
+adb shell am start -W -a android.intent.action.VIEW \
+  -d "app://app/override?apiAddress=https%3A%2F%2Fapi.staging.example.com" \
+  com.example.app
+
+# Clear override (return to default)
+adb shell am start -W -a android.intent.action.VIEW \
+  -d "app://app/override?apiAddress=clear" \
+  com.example.app
+```
+
+### Using xcrun (iOS Simulator)
+
+```bash
+# Override to local server
+xcrun simctl openurl booted "app://app/override?apiAddress=http%3A%2F%2Flocalhost%3A8080"
+
+# Clear override
+xcrun simctl openurl booted "app://app/override?apiAddress=clear"
+```
+
+### Generating URL-Encoded Endpoints
+
+You can use online URL encoders or command-line tools:
+
+```bash
+# Using Python
+python3 -c "import urllib.parse; print(urllib.parse.quote('https://api.staging.example.com'))"
+
+# Using Node.js
+node -e "console.log(encodeURIComponent('https://api.staging.example.com'))"
+```
+
+## Clearing the Override
+
+To reset to the default endpoint, use the special value `clear`:
+
+```
+app://app/override?apiAddress=clear
+```
+
+This removes the persisted endpoint from SharedPreferences and returns to using `defaultEndpoint`.
+
+## Advanced Usage
+
+### Custom Storage Key
+
+If you need to store multiple endpoints or avoid naming conflicts:
+
+```dart
+final apiEndpoint = await overrideApiEndpoint(
+  sharedPreferences: prefs,
+  getInitialUri: getInitialUri,
+  deeplinkOverrideSegment: 'override-api',
+  deeplinkQueryParameter: 'endpoint',
+  defaultEndpoint: Uri.parse('https://api.example.com'),
+  apiEndpointKey: 'custom_api_endpoint_key',
+);
+```
+
+### Multiple Environments
+
+<CodeGroup>
+```dart multiple_endpoints.dart
+// Main API
+final mainApiEndpoint = await overrideApiEndpoint(
+  sharedPreferences: prefs,
+  getInitialUri: getInitialUri,
+  deeplinkOverrideSegment: 'override-main',
+  deeplinkQueryParameter: 'mainApi',
+  defaultEndpoint: Uri.parse('https://api.example.com'),
+  apiEndpointKey: 'main_api_endpoint',
+);
+
+// Analytics API
+final analyticsEndpoint = await overrideApiEndpoint(
+  sharedPreferences: prefs,
+  getInitialUri: getInitialUri,
+  deeplinkOverrideSegment: 'override-analytics',
+  deeplinkQueryParameter: 'analyticsApi',
+  defaultEndpoint: Uri.parse('https://analytics.example.com'),
+  apiEndpointKey: 'analytics_api_endpoint',
+);
+```
+
+```bash deeplinks
+# Override main API
+adb shell am start -d "app://app/override-main?mainApi=https%3A%2F%2Fstaging-api.example.com"
+
+# Override analytics API
+adb shell am start -d "app://app/override-analytics?analyticsApi=https%3A%2F%2Fstaging-analytics.example.com"
+```
+</CodeGroup>
+
+### Integration with Dependency Injection
+
+```dart
+class ApiConfig {
+  static Future<ApiConfig> initialize() async {
+    final endpoint = await overrideApiEndpoint(
+      sharedPreferences: await SharedPreferences.getInstance(),
+      getInitialUri: getInitialUri,
+      deeplinkOverrideSegment: 'override',
+      deeplinkQueryParameter: 'apiAddress',
+      defaultEndpoint: Uri.parse('https://api.example.com'),
+    );
+
+    return ApiConfig._(endpoint);
+  }
+
+  ApiConfig._(this.endpoint);
+
+  final Uri endpoint;
+
+  String get baseUrl => endpoint.toString();
+}
+
+// In main.dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final apiConfig = await ApiConfig.initialize();
+
+  runApp(MyApp(apiConfig: apiConfig));
+}
+```
+
+## Best Practices
+
+<Card title="Security Considerations" icon="shield">
+  - Only enable endpoint override in debug/staging builds
+  - Validate endpoint URLs before using them
+  - Use HTTPS endpoints in production
+  - Consider adding authentication for override deeplinks
+</Card>
+
+<Card title="Development Workflow" icon="code">
+  - Document available endpoints for your team
+  - Create shell scripts for common overrides
+  - Add override instructions to your README
+  - Test override functionality during QA
+</Card>
+
+## Troubleshooting
+
+<Accordion title="Endpoint not changing">
+  - Verify the deeplink is correctly formatted and URL-encoded
+  - Check that `deeplinkOverrideSegment` matches the path in your deeplink
+  - Ensure `getInitialUri` is correctly configured
+  - Restart the app after sending the deeplink
+</Accordion>
+
+<Accordion title="Deeplinks not working">
+  - Verify deeplink configuration in AndroidManifest.xml (Android) or Info.plist (iOS)
+  - Test deeplinks using platform-specific tools (adb or xcrun)
+  - Check that your app is registered to handle the URL scheme
+  - Review deeplink handling package documentation (uni_links, app_links)
+</Accordion>
+
+<Accordion title="Endpoint not persisting">
+  - Ensure SharedPreferences is initialized properly
+  - Check that the app has permission to write to storage
+  - Verify `apiEndpointKey` is unique and not being overwritten
+</Accordion>
+
+## Package Information
+
+- **Latest Version:** 2.0.0+1
+- **Minimum Dart SDK:** 2.12.0
+- **Minimum Flutter:** 2.0.0
+- **Repository:** [GitHub](https://github.com/leancodepl/flutter_corelibrary)
+- **Pub.dev:** [override_api_endpoint](https://pub.dev/packages/override_api_endpoint)
+
+### Dependencies
+
+- `shared_preferences`: ^2.0.6 - Persistent storage
+
+<Note>
+  This package only provides the endpoint override logic. You'll need to add a deeplink handling package like `uni_links` or `app_links` separately.
+</Note>

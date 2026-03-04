@@ -1,0 +1,267 @@
+---
+title: Installation
+description: Learn how to add Flutter CoreLibrary packages to your Flutter project
+---
+
+Flutter CoreLibrary packages are published on [pub.dev](https://pub.dev) and can be easily added to your Flutter project. You can install individual packages based on your needs.
+
+## Prerequisites
+
+Before installing Flutter CoreLibrary packages, ensure you have:
+
+- Flutter SDK installed (version 3.0.0 or higher recommended)
+- A Flutter project set up
+- Basic familiarity with `pubspec.yaml` file
+
+## Installing packages
+
+You can add Flutter CoreLibrary packages to your project using either the Flutter CLI or by manually editing your `pubspec.yaml` file.
+
+<Steps>
+  <Step title="Choose your packages">
+    Identify which packages you need from the Flutter CoreLibrary. Each package serves a specific purpose:
+    
+    - **cqrs** - CQRS backend communication
+    - **leancode_lint** - Lint rules and code quality
+    - **leancode_hooks** - Reusable Flutter hooks
+    - **enhanced_gradients** - Better gradient rendering
+    - **login_client** - OAuth2 authentication
+    - **leancode_debug_page** - Debug tools
+    - **leancode_force_update** - Force update functionality
+    - **leancode_markup** - Markup text rendering
+    
+    See the [packages overview](/packages) for a complete list.
+  </Step>
+  
+  <Step title="Add packages using CLI">
+    The easiest way to add packages is using the Flutter CLI:
+    
+    <CodeGroup>
+    ```bash Regular packages
+    flutter pub add cqrs
+    flutter pub add leancode_hooks
+    flutter pub add enhanced_gradients
+    ```
+    
+    ```bash Dev dependencies
+    # For packages like leancode_lint, add as dev dependency
+    flutter pub add leancode_lint --dev
+    ```
+    </CodeGroup>
+    
+    This automatically adds the latest version to your `pubspec.yaml` and runs `flutter pub get`.
+  </Step>
+  
+  <Step title="Or add manually to pubspec.yaml">
+    Alternatively, you can manually edit your `pubspec.yaml` file:
+    
+    ```yaml pubspec.yaml
+    dependencies:
+      flutter:
+        sdk: flutter
+      
+      # CQRS communication
+      cqrs: ^10.1.0
+      
+      # Flutter hooks
+      leancode_hooks: ^0.1.2
+      
+      # Enhanced gradients
+      enhanced_gradients: ^2.0.0
+      
+      # OAuth2 login client
+      login_client: ^3.2.0
+      
+      # Debug page
+      leancode_debug_page: ^0.1.0
+      
+    dev_dependencies:
+      flutter_test:
+        sdk: flutter
+      
+      # Lint rules (dev dependency)
+      leancode_lint: ^21.0.0
+    ```
+    
+    After editing, run:
+    
+    ```bash
+    flutter pub get
+    ```
+  </Step>
+  
+  <Step title="Import and use">
+    Import the packages in your Dart files:
+    
+    <CodeGroup>
+    ```dart CQRS
+    import 'package:cqrs/cqrs.dart';
+    
+    // Create a CQRS instance
+    final cqrs = Cqrs(httpClient, apiUri);
+    
+    // Execute queries
+    final result = await cqrs.get(MyQuery());
+    ```
+    
+    ```dart Hooks
+    import 'package:leancode_hooks/leancode_hooks.dart';
+    
+    // Use hooks in your widgets
+    class MyWidget extends HookWidget {
+      @override
+      Widget build(BuildContext context) {
+        final controller = useTextEditingController();
+        final state = useState(0);
+        
+        return TextField(controller: controller);
+      }
+    }
+    ```
+    
+    ```dart Enhanced Gradients
+    import 'package:enhanced_gradients/enhanced_gradients.dart';
+    
+    // Use enhanced gradients
+    Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue, Colors.purple],
+        ).enhanced(),
+      ),
+    )
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+## Special configuration
+
+Some packages require additional setup:
+
+### leancode_lint
+
+After installing `leancode_lint`, you need to configure your `analysis_options.yaml`:
+
+```yaml analysis_options.yaml
+include: package:leancode_lint/analysis_options.yaml
+
+plugins:
+  leancode_lint: ^21.0.0
+
+analyzer:
+  exclude:
+    - '**/*.g.dart'
+    - '**/*.freezed.dart'
+```
+
+Then restart the analysis server in your IDE.
+
+<Tip>
+  For library packages (not apps), use `analysis_options_package.yaml` instead:
+  ```yaml
+  include: package:leancode_lint/analysis_options_package.yaml
+  ```
+</Tip>
+
+### leancode_debug_page
+
+To use the debug page, wrap your `MaterialApp` with `DebugPageOverlay`:
+
+```dart
+class MyApp extends StatefulWidget {
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final navigatorKey = GlobalKey<NavigatorState>();
+  late DebugPageController _debugPageController;
+  
+  @override
+  void initState() {
+    super.initState();
+    _debugPageController = DebugPageController(
+      showEntryButton: true,
+      loggingHttpClient: loggingHttpClient,
+      navigatorKey: navigatorKey,
+    );
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return DebugPageOverlay(
+      controller: _debugPageController,
+      child: MaterialApp(
+        navigatorKey: navigatorKey,
+        navigatorObservers: [_debugPageController.navigatorObserver],
+        home: MyHomePage(),
+      ),
+    );
+  }
+}
+```
+
+### leancode_force_update
+
+Wrap your `MaterialApp` with `ForceUpdateGuard`:
+
+```dart
+ForceUpdateGuard(
+  cqrs: cqrs,
+  controller: forceUpdateController,
+  suggestUpdateDialog: (context) => MySuggestUpdateDialog(),
+  forceUpdateScreen: (context) => MyForceUpdateScreen(),
+  child: MaterialApp(
+    home: MyHomePage(),
+  ),
+)
+```
+
+## Version compatibility
+
+<Warning>
+  Ensure your Flutter SDK version meets the minimum requirements for each package. Most packages require Flutter 3.0.0 or higher.
+</Warning>
+
+Check each package's `pubspec.yaml` for specific version requirements:
+
+- **cqrs**: Dart SDK >=3.0.1
+- **leancode_lint**: Dart SDK >=3.11.0
+- **leancode_hooks**: Flutter >=3.35.0, Dart SDK >=3.9.0
+- **enhanced_gradients**: Flutter >=3.19.0, Dart SDK >=3.3.0
+
+## Troubleshooting
+
+### Package conflicts
+
+If you encounter version conflicts, try:
+
+```bash
+flutter pub upgrade
+```
+
+Or specify a compatible version range in your `pubspec.yaml`.
+
+### Analysis server issues
+
+If `leancode_lint` rules don't appear after installation:
+
+1. Restart the analysis server in your IDE
+2. Run `flutter clean` and `flutter pub get`
+3. Check that the plugin is correctly specified in `analysis_options.yaml`
+
+### Import errors
+
+Make sure you've run `flutter pub get` after adding packages to `pubspec.yaml`.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Core Packages" icon="cube" href="/packages/cqrs">
+    Explore CQRS and authentication packages
+  </Card>
+  <Card title="Guides" icon="book-open" href="/guides/getting-started-with-cqrs">
+    Get started with comprehensive guides
+  </Card>
+</CardGroup>

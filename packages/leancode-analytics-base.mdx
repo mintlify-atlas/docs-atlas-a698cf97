@@ -1,0 +1,321 @@
+---
+title: "leancode_analytics_base"
+description: "Base package providing core analytics abstractions for Flutter apps with pluggable backend support"
+---
+
+## Overview
+
+`leancode_analytics_base` provides the foundation for analytics tracking in Flutter applications. It defines a unified interface that allows you to track events and screen views across different analytics providers without coupling your code to a specific implementation.
+
+<Note>
+  This is a base package that provides abstractions only. Use implementation packages like `leancode_analytics_firebase` or `leancode_analytics_posthog` for actual analytics functionality.
+</Note>
+
+## Installation
+
+Add the package to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  leancode_analytics_base: 0.1.0
+```
+
+## Architecture
+
+The analytics system follows a plugin-based architecture with clear separation between interface and implementation:
+
+<Steps>
+  <Step title="Core Interface">
+    The `LeanAnalytics` interface defines the contract for all analytics implementations
+  </Step>
+  <Step title="Event System">
+    Events extend `AnalyticsEvent` to provide structured data for tracking
+  </Step>
+  <Step title="Route Tracking">
+    Routes implement `LeanAnalyticsRoute` to enable automatic screen view tracking
+  </Step>
+  <Step title="Backend Integration">
+    Specific backends (Firebase, PostHog) implement the `LeanAnalytics` interface
+  </Step>
+</Steps>
+
+## Core Components
+
+### LeanAnalytics Interface
+
+The main interface that all analytics backends must implement:
+
+```dart lib/src/analytics.dart
+/// Base interface for analytics implementations.
+///
+/// Provides a unified API for tracking analytics events and observing
+/// navigation changes across different analytics providers.
+abstract interface class LeanAnalytics {
+  /// Registers an analytics event to be tracked.
+  void register(AnalyticsEvent event);
+
+  /// Returns a list of [NavigatorObserver]s for automatic screen tracking.
+  List<NavigatorObserver> get navigatorObservers;
+}
+```
+
+<Accordion title="Why use an interface?">
+  The interface-based approach allows you to:
+  - Switch analytics providers without changing application code
+  - Use multiple analytics backends simultaneously
+  - Mock analytics in tests easily
+  - Keep your business logic decoupled from analytics implementation details
+</Accordion>
+
+### AnalyticsEvent Class
+
+Base class for all analytics events:
+
+```dart lib/src/event.dart
+/// Base class for all analytics events.
+class AnalyticsEvent {
+  const AnalyticsEvent({
+    required this.name,
+    this.params = const {},
+  });
+
+  /// The name of the event used for tracking.
+  final String name;
+
+  /// Additional parameters associated with this event.
+  final Map<String, Object> params;
+}
+```
+
+### Built-in Event Types
+
+The package includes commonly used event types:
+
+<CodeGroup>
+
+```dart Tap Event
+/// Track user interactions with UI elements
+TapAnalyticsEvent(
+  key: 'submit_button',
+  label: 'Submit Form',
+  params: {'form_type': 'registration'},
+)
+```
+
+```dart Login Event
+/// Track user authentication
+LoginAnalyticsEvent(
+  userId: 'user_123',
+  params: {'method': 'google'},
+)
+```
+
+```dart Custom Event
+/// Create your own events
+AnalyticsEvent(
+  name: 'purchase_completed',
+  params: {
+    'product_id': 'prod_123',
+    'amount': 99.99,
+    'currency': 'USD',
+  },
+)
+```
+
+</CodeGroup>
+
+### TapAnalyticsEvent
+
+Predefined event for tracking user taps and interactions:
+
+```dart lib/src/event.dart
+/// An analytics event for tracking user taps/clicks.
+class TapAnalyticsEvent extends AnalyticsEvent {
+  TapAnalyticsEvent({
+    required String key,
+    required String? label,
+    Map<String, Object> params = const {},
+  }) : super(
+    name: 'tap',
+    params: {
+      ...params,
+      'key': key,
+      if (label != null) 'label': label,
+    },
+  );
+}
+```
+
+<Warning>
+  Do not pass `key` or `label` in the `params` map - they will be overridden by the named parameters.
+</Warning>
+
+### LoginAnalyticsEvent
+
+Predefined event for tracking user authentication:
+
+```dart lib/src/event.dart
+/// An analytics event for tracking user login.
+class LoginAnalyticsEvent extends AnalyticsEvent {
+  LoginAnalyticsEvent({
+    required String userId,
+    Map<String, Object> params = const {},
+  }) : super(
+    name: 'login',
+    params: {
+      ...params,
+      'user_id': userId,
+    },
+  );
+}
+```
+
+### LeanAnalyticsRoute Interface
+
+Interface for routes that should be automatically tracked:
+
+```dart lib/src/route.dart
+/// Interface for routes that should be tracked by analytics.
+abstract interface class LeanAnalyticsRoute {
+  /// Unique identifier for this screen/route used in analytics.
+  String get id;
+
+  /// Optional parameters to include with screen view events.
+  Map<String, dynamic>? get analyticsParams;
+}
+```
+
+## Usage Examples
+
+### Creating Custom Events
+
+Extend `AnalyticsEvent` to create domain-specific events:
+
+```dart
+class ProductViewedEvent extends AnalyticsEvent {
+  ProductViewedEvent({
+    required String productId,
+    required String category,
+    double? price,
+  }) : super(
+    name: 'product_viewed',
+    params: {
+      'product_id': productId,
+      'category': category,
+      if (price != null) 'price': price,
+    },
+  );
+}
+
+// Usage
+analytics.register(
+  ProductViewedEvent(
+    productId: 'prod_123',
+    category: 'electronics',
+    price: 299.99,
+  ),
+);
+```
+
+### Implementing Route Tracking
+
+Make your routes trackable by implementing `LeanAnalyticsRoute`:
+
+```dart
+class HomeRoute extends GoRoute implements LeanAnalyticsRoute {
+  HomeRoute()
+      : super(
+          path: '/home',
+          builder: (context, state) => const HomeScreen(),
+        );
+
+  @override
+  String get id => 'home_screen';
+
+  @override
+  Map<String, dynamic>? get analyticsParams => {
+        'screen_type': 'main',
+      };
+}
+```
+
+<Note>
+  When using `NavigatorObserver`s from the analytics implementation, screen views will be tracked automatically for all routes implementing `LeanAnalyticsRoute`.
+</Note>
+
+### Using with Dependency Injection
+
+```dart
+class AnalyticsService {
+  AnalyticsService(this._analytics);
+  
+  final LeanAnalytics _analytics;
+
+  void trackButtonTap(String buttonKey, {String? label}) {
+    _analytics.register(
+      TapAnalyticsEvent(key: buttonKey, label: label),
+    );
+  }
+
+  void trackLogin(String userId, String method) {
+    _analytics.register(
+      LoginAnalyticsEvent(
+        userId: userId,
+        params: {'method': method},
+      ),
+    );
+  }
+}
+```
+
+## Implementation Packages
+
+Choose an implementation package based on your analytics provider:
+
+<CardGroup cols={2}>
+  <Card title="Firebase Analytics" icon="fire" href="/packages/leancode-analytics-firebase">
+    Google's analytics solution with deep integration into Firebase ecosystem
+  </Card>
+  <Card title="PostHog Analytics" icon="chart-line" href="/packages/leancode-analytics-posthog">
+    Open-source product analytics platform with session replay and feature flags
+  </Card>
+</CardGroup>
+
+## API Reference
+
+### LeanAnalytics
+
+<ParamField path="register" type="void Function(AnalyticsEvent)">
+  Registers an analytics event to be tracked by the backend
+</ParamField>
+
+<ParamField path="navigatorObservers" type="List<NavigatorObserver>">
+  List of navigator observers for automatic screen tracking
+</ParamField>
+
+### AnalyticsEvent
+
+<ParamField path="name" type="String" required>
+  The name of the event used for tracking
+</ParamField>
+
+<ParamField path="params" type="Map<String, Object>" default="{}">
+  Additional parameters associated with this event
+</ParamField>
+
+### LeanAnalyticsRoute
+
+<ParamField path="id" type="String" required>
+  Unique identifier for this screen/route used in analytics
+</ParamField>
+
+<ParamField path="analyticsParams" type="Map<String, dynamic>?">
+  Optional parameters to include with screen view events
+</ParamField>
+
+## Package Information
+
+- **Version:** 0.1.0
+- **Minimum Dart SDK:** 3.5.0
+- **Minimum Flutter:** 3.24.0
+- **Repository:** [flutter_corelibrary](https://github.com/leancodepl/flutter_corelibrary)

@@ -1,0 +1,760 @@
+---
+title: Authentication Setup
+description: A comprehensive guide to setting up OAuth2 authentication with LoginClient for automatic token management and refresh
+---
+
+The `login_client` package provides a robust OAuth2-compliant authentication client with automatic token refresh, credential storage, and easy integration into existing Flutter apps.
+
+## What is LoginClient?
+
+LoginClient is an HTTP client wrapper that:
+
+- Implements OAuth2 authentication flows
+- Automatically refreshes expired tokens
+- Securely stores credentials
+- Handles 401 errors with automatic retry
+- Provides a stream of credential changes for logout detection
+
+## Installation
+
+<Steps>
+  <Step title="Add dependencies">
+    Add both `login_client` and `login_client_flutter` to your `pubspec.yaml`:
+
+    ```bash
+    flutter pub add login_client login_client_flutter
+    ```
+
+    The `login_client_flutter` package provides `FlutterSecureCredentialsStorage` for secure credential storage.
+  </Step>
+
+  <Step title="Import the packages">
+    ```dart
+    import 'package:login_client/login_client.dart';
+    import 'package:login_client_flutter/login_client_flutter.dart';
+    ```
+  </Step>
+
+  <Step title="Configure Android backup exclusion">
+    To prevent `javax.crypto.BadPaddingException`, exclude Flutter Secure Storage from Android backups.
+
+    Update `android/app/src/main/AndroidManifest.xml`:
+    ```xml
+    <application
+        ...
+        android:fullBackupContent="@xml/backup_rules">
+    ```
+
+    Create `android/app/src/main/res/xml/backup_rules.xml`:
+    ```xml
+    <?xml version="1.0" encoding="utf-8"?>
+    <full-backup-content>
+        <exclude domain="sharedpref" path="FlutterSecureStorage" />
+    </full-backup-content>
+    ```
+  </Step>
+</Steps>
+
+## Basic Setup
+
+### Initialize LoginClient
+
+Create a LoginClient instance with your OAuth settings and credentials storage:
+
+```dart
+import 'package:login_client/login_client.dart';
+import 'package:login_client_flutter/login_client_flutter.dart';
+
+final loginClient = LoginClient(
+  oAuthSettings: OAuthSettings(
+    authorizationUri: Uri.parse('https://api.example.com/auth'),
+    clientId: 'your_client_id',
+    clientSecret: 'your_client_secret', // Optional, for confidential clients
+    scopes: ['read', 'write'], // Optional
+  ),
+  credentialsStorage: const FlutterSecureCredentialsStorage(),
+);
+
+// Initialize to restore saved credentials
+await loginClient.initialize();
+```
+
+<Note>
+  Always call `initialize()` after creating the LoginClient to restore previously saved credentials.
+</Note>
+
+### OAuth Settings
+
+The `OAuthSettings` class configures your OAuth2 authentication:
+
+```dart
+final oAuthSettings = OAuthSettings(
+  authorizationUri: Uri.parse('https://api.example.com/auth'),
+  clientId: 'mobile_app_client',
+  clientSecret: 'secret', // Only for confidential clients
+  scopes: ['profile', 'email', 'offline_access'],
+);
+```
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `authorizationUri` | The OAuth2 token endpoint URL | Yes |
+| `clientId` | Your application's client identifier | Yes |
+| `clientSecret` | Secret for confidential clients | No |
+| `scopes` | List of permission scopes to request | No |
+
+## Authentication Strategies
+
+LoginClient supports multiple OAuth2 authentication strategies.
+
+### Resource Owner Password Strategy
+
+The most common strategy for mobile apps - authenticate with username and password:
+
+```dart
+try {
+  await loginClient.logIn(
+    ResourceOwnerPasswordStrategy('username', 'password'),
+  );
+  
+  // User is now logged in
+  print('Login successful!');
+  navigateToHome();
+} on AuthorizationException catch (e) {
+  // Handle authentication failure
+  print('Login failed: ${e.error}');
+  showErrorMessage('Invalid username or password');
+}
+```
+
+<Tabs>
+  <Tab title="Basic Login">
+    ```dart
+    Future<void> login(String username, String password) async {
+      try {
+        await loginClient.logIn(
+          ResourceOwnerPasswordStrategy(username, password),
+        );
+        
+        if (loginClient.loggedIn) {
+          print('Successfully logged in!');
+        }
+      } on AuthorizationException {
+        print('Login failed');
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="With Loading State">
+    ```dart
+    Future<void> login(String username, String password) async {
+      setState(() => isLoading = true);
+      
+      try {
+        await loginClient.logIn(
+          ResourceOwnerPasswordStrategy(username, password),
+        );
+        navigateToHome();
+      } on AuthorizationException catch (e) {
+        showSnackbar('Login failed: ${e.error}');
+      } finally {
+        setState(() => isLoading = false);
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="With Form Validation">
+    ```dart
+    Future<void> login() async {
+      if (!formKey.currentState!.validate()) {
+        return;
+      }
+      
+      final username = usernameController.text;
+      final password = passwordController.text;
+      
+      try {
+        await loginClient.logIn(
+          ResourceOwnerPasswordStrategy(username, password),
+        );
+        navigateToHome();
+      } on AuthorizationException {
+        setState(() {
+          errorMessage = 'Invalid credentials';
+        });
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Client Credentials Strategy
+
+For machine-to-machine authentication without user credentials:
+
+```dart
+import 'package:login_client/login_client.dart';
+
+await loginClient.logIn(
+  ClientCredentialsStrategy(),
+);
+```
+
+<Note>
+  This strategy requires `clientSecret` to be set in `OAuthSettings`.
+</Note>
+
+### Custom Grant Strategy
+
+For custom OAuth2 grant types:
+
+```dart
+await loginClient.logIn(
+  CustomGrantStrategy(
+    grantType: 'sms_token',
+    parameters: {
+      'phone_number': '+1234567890',
+      'verification_code': '123456',
+    },
+  ),
+);
+```
+
+### Raw Credentials Strategy
+
+Use existing OAuth2 credentials directly:
+
+```dart
+import 'package:oauth2/oauth2.dart' as oauth2;
+
+final credentials = oauth2.Credentials(
+  'access_token_value',
+  refreshToken: 'refresh_token_value',
+  tokenEndpoint: Uri.parse('https://api.example.com/auth'),
+  scopes: ['read', 'write'],
+  expiration: DateTime.now().add(Duration(hours: 1)),
+);
+
+await loginClient.logIn(
+  RawCredentialsStrategy(credentials),
+);
+```
+
+## Making Authenticated Requests
+
+LoginClient extends `http.Client`, so you can use it like a regular HTTP client:
+
+```dart
+// GET request
+final response = await loginClient.get(
+  Uri.parse('https://api.example.com/user/profile'),
+);
+
+if (response.statusCode == 200) {
+  final data = jsonDecode(response.body);
+  print('User: ${data['name']}');
+}
+
+// POST request
+final createResponse = await loginClient.post(
+  Uri.parse('https://api.example.com/items'),
+  headers: {'Content-Type': 'application/json'},
+  body: jsonEncode({'name': 'New Item'}),
+);
+
+// PUT, DELETE, etc.
+final updateResponse = await loginClient.put(Uri.parse('...'));
+final deleteResponse = await loginClient.delete(Uri.parse('...'));
+```
+
+<Tip>
+  LoginClient automatically adds the OAuth2 bearer token to all requests and refreshes it when it expires.
+</Tip>
+
+### Automatic Token Refresh
+
+When a request receives a 401 response, LoginClient automatically:
+
+1. Refreshes the access token using the refresh token
+2. Retries the original request with the new token
+3. Logs out the user if refresh fails
+
+```dart
+// This request will automatically refresh tokens if needed
+final response = await loginClient.get(
+  Uri.parse('https://api.example.com/protected-resource'),
+);
+
+// No manual token handling required!
+```
+
+## Managing Authentication State
+
+### Check Login Status
+
+```dart
+if (loginClient.loggedIn) {
+  print('User is authenticated');
+} else {
+  print('User is not authenticated');
+  navigateToLogin();
+}
+```
+
+### Listen to Credential Changes
+
+Use the credentials stream to react to authentication state changes:
+
+```dart
+loginClient.onCredentialsChanged.listen((credentials) {
+  if (credentials == null) {
+    // User logged out or session expired
+    print('User is logged out');
+    navigateToLogin();
+  } else {
+    // Credentials updated (login or refresh)
+    print('Access token: ${credentials.accessToken}');
+    print('Expires at: ${credentials.expiration}');
+  }
+});
+```
+
+<CodeGroup>
+```dart Full Example with Stream
+class AuthService {
+  final LoginClient loginClient;
+  StreamSubscription<Credentials?>? _credentialsSubscription;
+
+  AuthService(this.loginClient);
+
+  void initialize() {
+    _credentialsSubscription = loginClient.onCredentialsChanged.listen(
+      (credentials) {
+        if (credentials == null) {
+          _handleLogout();
+        } else {
+          _handleLogin(credentials);
+        }
+      },
+    );
+  }
+
+  void _handleLogin(Credentials credentials) {
+    print('User logged in, token expires: ${credentials.expiration}');
+    // Update UI state, navigate to home, etc.
+  }
+
+  void _handleLogout() {
+    print('User logged out');
+    // Clear app state, navigate to login, etc.
+  }
+
+  void dispose() {
+    _credentialsSubscription?.cancel();
+  }
+}
+```
+</CodeGroup>
+
+### Manual Token Refresh
+
+Force a token refresh (useful for updating scopes):
+
+```dart
+try {
+  // Refresh with the same scopes
+  await loginClient.refresh();
+  
+  // Or refresh with new scopes
+  await loginClient.refresh(['read', 'write', 'admin']);
+  
+  print('Token refreshed successfully');
+} on AuthorizationException {
+  print('Refresh failed, user logged out');
+}
+```
+
+<Warning>
+  If token refresh fails, LoginClient automatically logs out the user and clears stored credentials.
+</Warning>
+
+### Logout
+
+Log out the user and clear stored credentials:
+
+```dart
+await loginClient.logOut();
+print('User logged out');
+navigateToLogin();
+```
+
+## Credential Storage
+
+### Secure Storage (Recommended)
+
+Use `FlutterSecureCredentialsStorage` for production apps:
+
+```dart
+import 'package:login_client_flutter/login_client_flutter.dart';
+
+final loginClient = LoginClient(
+  oAuthSettings: oAuthSettings,
+  credentialsStorage: const FlutterSecureCredentialsStorage(),
+);
+```
+
+This stores credentials securely using:
+- **iOS**: Keychain
+- **Android**: EncryptedSharedPreferences
+- **Web**: Web Crypto API
+- **Linux**: libsecret
+- **Windows**: Credential Manager
+- **macOS**: Keychain
+
+### In-Memory Storage (Testing Only)
+
+For testing or development, use in-memory storage:
+
+```dart
+import 'package:login_client/login_client.dart';
+
+final loginClient = LoginClient(
+  oAuthSettings: oAuthSettings,
+  credentialsStorage: InMemoryCredentialsStorage(),
+);
+```
+
+<Warning>
+  In-memory storage loses credentials when the app restarts. Only use it for testing!
+</Warning>
+
+### Custom Credential Storage
+
+Implement your own storage mechanism:
+
+```dart
+class CustomCredentialsStorage implements CredentialsStorage {
+  @override
+  Future<Credentials?> read() async {
+    // Read from your custom storage
+    final json = await myStorage.read('oauth_credentials');
+    if (json != null) {
+      return Credentials.fromJson(jsonDecode(json));
+    }
+    return null;
+  }
+
+  @override
+  Future<void> save(Credentials credentials) async {
+    // Save to your custom storage
+    await myStorage.write(
+      'oauth_credentials',
+      jsonEncode(credentials.toJson()),
+    );
+  }
+
+  @override
+  Future<void> clear() async {
+    // Clear from your custom storage
+    await myStorage.delete('oauth_credentials');
+  }
+}
+```
+
+## Integration with CQRS
+
+LoginClient works seamlessly with the CQRS package:
+
+```dart
+import 'package:cqrs/cqrs.dart';
+import 'package:login_client/login_client.dart';
+import 'package:login_client_flutter/login_client_flutter.dart';
+
+// Initialize LoginClient
+final loginClient = LoginClient(
+  oAuthSettings: OAuthSettings(
+    authorizationUri: Uri.parse('https://api.example.com/auth'),
+    clientId: 'mobile_app',
+  ),
+  credentialsStorage: const FlutterSecureCredentialsStorage(),
+);
+
+await loginClient.initialize();
+
+// Initialize CQRS with LoginClient
+final cqrs = Cqrs(
+  loginClient, // LoginClient handles authentication automatically!
+  Uri.parse('https://api.example.com/api/'),
+);
+
+// Now all CQRS requests are automatically authenticated
+final result = await cqrs.get(GetUserProfile());
+```
+
+## Advanced Features
+
+### Custom HTTP Client
+
+Provide a custom HTTP client for advanced networking:
+
+```dart
+import 'package:http/http.dart' as http;
+
+final customClient = http.Client();
+
+final loginClient = LoginClient(
+  oAuthSettings: oAuthSettings,
+  credentialsStorage: const FlutterSecureCredentialsStorage(),
+  httpClient: customClient,
+);
+```
+
+### Custom Logging
+
+Add custom logging to debug authentication issues:
+
+```dart
+final loginClient = LoginClient(
+  oAuthSettings: oAuthSettings,
+  credentialsStorage: const FlutterSecureCredentialsStorage(),
+  logger: (message) {
+    print('[Auth] $message');
+    myLogger.log(message);
+  },
+);
+```
+
+### Access Current Credentials
+
+Read the current credentials directly:
+
+```dart
+final credentials = await loginClient.credentials;
+
+if (credentials != null) {
+  print('Access token: ${credentials.accessToken}');
+  print('Refresh token: ${credentials.refreshToken}');
+  print('Expires: ${credentials.expiration}');
+  print('Scopes: ${credentials.scopes}');
+}
+```
+
+## Complete Example
+
+<CodeGroup>
+```dart Login Screen
+import 'package:flutter/material.dart';
+import 'package:login_client/login_client.dart';
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({required this.loginClient, super.key});
+
+  final LoginClient loginClient;
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.loginClient.logIn(
+        ResourceOwnerPasswordStrategy(
+          _usernameController.text,
+          _passwordController.text,
+        ),
+      );
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+    } on AuthorizationException catch (e) {
+      setState(() {
+        _errorMessage = 'Login failed: ${e.error}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Login')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextFormField(
+                controller: _usernameController,
+                decoration: const InputDecoration(labelText: 'Username'),
+                validator: (value) {
+                  if (value?.isEmpty ?? true) {
+                    return 'Please enter username';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                decoration: const InputDecoration(labelText: 'Password'),
+                obscureText: true,
+                validator: (value) {
+                  if (value?.isEmpty ?? true) {
+                    return 'Please enter password';
+                  }
+                  return null;
+                },
+              ),
+              if (_errorMessage != null) ..[
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _login,
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('Login'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+```dart App Setup
+import 'package:flutter/material.dart';
+import 'package:login_client/login_client.dart';
+import 'package:login_client_flutter/login_client_flutter.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize LoginClient
+  final loginClient = LoginClient(
+    oAuthSettings: OAuthSettings(
+      authorizationUri: Uri.parse('https://api.example.com/auth'),
+      clientId: 'mobile_app',
+    ),
+    credentialsStorage: const FlutterSecureCredentialsStorage(),
+  );
+
+  await loginClient.initialize();
+
+  runApp(MyApp(loginClient: loginClient));
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({required this.loginClient, super.key});
+
+  final LoginClient loginClient;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Auth Example',
+      home: loginClient.loggedIn
+          ? HomeScreen(loginClient: loginClient)
+          : LoginScreen(loginClient: loginClient),
+    );
+  }
+}
+```
+</CodeGroup>
+
+## Best Practices
+
+<Accordion title="Always initialize LoginClient on app start">
+  Call `await loginClient.initialize()` before running your app to restore saved credentials:
+
+  ```dart
+  void main() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await loginClient.initialize();
+    runApp(MyApp());
+  }
+  ```
+</Accordion>
+
+<Accordion title="Handle credential changes for auto-logout">
+  Listen to `onCredentialsChanged` to detect session expiration:
+
+  ```dart
+  loginClient.onCredentialsChanged.listen((credentials) {
+    if (credentials == null) {
+      // Automatically navigate to login screen
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        '/login',
+        (route) => false,
+      );
+    }
+  });
+  ```
+</Accordion>
+
+<Accordion title="Use FlutterSecureCredentialsStorage in production">
+  Never use `InMemoryCredentialsStorage` in production. Always use secure storage:
+
+  ```dart
+  // Production
+  credentialsStorage: const FlutterSecureCredentialsStorage(),
+
+  // Testing only
+  credentialsStorage: InMemoryCredentialsStorage(),
+  ```
+</Accordion>
+
+<Accordion title="Dispose LoginClient when done">
+  Call `dispose()` to clean up resources:
+
+  ```dart
+  @override
+  void dispose() {
+    loginClient.dispose();
+    super.dispose();
+  }
+  ```
+</Accordion>
+
+## Next Steps
+
+- Integrate with [CQRS for backend communication](/guides/getting-started-with-cqrs)
+- Add [analytics tracking](/guides/analytics-integration) to monitor authentication events
+- Set up [custom lint rules](/guides/custom-lint-configuration) for code quality

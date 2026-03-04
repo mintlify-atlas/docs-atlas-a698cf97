@@ -1,0 +1,559 @@
+---
+title: "leancode_analytics_posthog"
+description: "PostHog Analytics implementation for LeanCode analytics with automatic screen tracking and session replay support"
+---
+
+## Overview
+
+`leancode_analytics_posthog` provides a PostHog Analytics backend for the LeanCode analytics system. It implements the `LeanAnalytics` interface from `leancode_analytics_base` and leverages the `posthog_flutter` package for comprehensive product analytics including events, screen views, and session replay.
+
+<Note>
+  This package requires PostHog to be configured in your app before use. You'll need a PostHog API key and host URL.
+</Note>
+
+## Features
+
+- PostHog Analytics integration using the official `posthog_flutter` package
+- Automatic screen view tracking via `LeanAnalyticsPostHogObserver`
+- Support for custom analytics events
+- Type-safe event tracking with built-in events (Tap, Login)
+- Session replay capabilities (from PostHog)
+- Feature flags and A/B testing support (from PostHog)
+- Self-hosted or cloud options
+
+## Installation
+
+<Steps>
+  <Step title="Add dependencies">
+    Add the package to your `pubspec.yaml`:
+
+    ```yaml pubspec.yaml
+    dependencies:
+      leancode_analytics_posthog: 0.1.0+1
+      posthog_flutter: ^5.6.0
+    ```
+  </Step>
+  
+  <Step title="Install packages">
+    Run the Flutter package manager:
+
+    ```bash
+    flutter pub get
+    ```
+  </Step>
+  
+  <Step title="Get PostHog credentials">
+    Sign up at [PostHog](https://posthog.com) or set up a self-hosted instance to get your API key and host URL
+  </Step>
+</Steps>
+
+## Configuration
+
+### Basic Setup
+
+Initialize PostHog and create a `PostHogLeanAnalytics` instance:
+
+```dart main.dart
+import 'package:leancode_analytics_posthog/leancode_analytics_posthog.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize PostHog
+  await Posthog().setup(
+    apiKey: 'phc_YOUR_API_KEY',
+    host: 'https://app.posthog.com', // or your self-hosted URL
+  );
+  
+  // Create analytics instance
+  final analytics = PostHogLeanAnalytics();
+  
+  runApp(MyApp(analytics: analytics));
+}
+```
+
+### Advanced Configuration
+
+Configure PostHog with additional options:
+
+```dart
+await Posthog().setup(
+  apiKey: 'phc_YOUR_API_KEY',
+  host: 'https://app.posthog.com',
+  // Enable session replay
+  captureScreenViews: true,
+  // Auto-capture touch events
+  captureApplicationLifecycleEvents: true,
+  // Enable debug mode
+  debug: kDebugMode,
+  // Custom flush interval
+  flushIntervalSeconds: 30,
+);
+```
+
+<Warning>
+  Never commit your PostHog API key to version control. Use environment variables or Flutter's `--dart-define` flag for secure configuration.
+</Warning>
+
+### Integrate with MaterialApp
+
+Add the navigator observers to enable automatic screen tracking:
+
+```dart
+class MyApp extends StatelessWidget {
+  const MyApp({required this.analytics, super.key});
+  
+  final PostHogLeanAnalytics analytics;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'My App',
+      navigatorObservers: analytics.navigatorObservers,
+      home: const HomeScreen(),
+    );
+  }
+}
+```
+
+### Using with GoRouter
+
+```dart
+final router = GoRouter(
+  observers: analytics.navigatorObservers,
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const HomeScreen(),
+    ),
+  ],
+);
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      routerConfig: router,
+    );
+  }
+}
+```
+
+## Tracking Events
+
+### Using Built-in Events
+
+<CodeGroup>
+
+```dart Tap Events
+import 'package:leancode_analytics_posthog/leancode_analytics_posthog.dart';
+
+// Track button taps
+analytics.register(
+  TapAnalyticsEvent(
+    key: 'checkout_button',
+    label: 'Proceed to Checkout',
+  ),
+);
+
+// With additional parameters
+analytics.register(
+  TapAnalyticsEvent(
+    key: 'product_card',
+    label: 'MacBook Pro',
+    params: {
+      'product_id': 'prod_456',
+      'price': 2399.00,
+      'category': 'laptops',
+    },
+  ),
+);
+```
+
+```dart Login Events
+// Track user login
+analytics.register(
+  LoginAnalyticsEvent(
+    userId: 'user_789',
+  ),
+);
+
+// With authentication method
+analytics.register(
+  LoginAnalyticsEvent(
+    userId: 'user_012',
+    params: {
+      'method': 'apple',
+      'is_new_user': false,
+      'signup_date': '2024-01-15',
+    },
+  ),
+);
+```
+
+```dart Custom Events
+// Track any custom event
+analytics.register(
+  AnalyticsEvent(
+    name: 'video_played',
+    params: {
+      'video_id': 'vid_123',
+      'duration': 180,
+      'quality': '1080p',
+      'autoplay': false,
+    },
+  ),
+);
+```
+
+</CodeGroup>
+
+### Creating Custom Events
+
+Extend `AnalyticsEvent` for domain-specific events:
+
+```dart
+class SubscriptionPurchasedEvent extends AnalyticsEvent {
+  SubscriptionPurchasedEvent({
+    required String planId,
+    required String planName,
+    required double price,
+    required String interval,
+  }) : super(
+    name: 'subscription_purchased',
+    params: {
+      'plan_id': planId,
+      'plan_name': planName,
+      'price': price,
+      'interval': interval,
+      'currency': 'USD',
+    },
+  );
+}
+
+// Usage
+analytics.register(
+  SubscriptionPurchasedEvent(
+    planId: 'plan_premium',
+    planName: 'Premium Monthly',
+    price: 9.99,
+    interval: 'monthly',
+  ),
+);
+```
+
+## Automatic Screen Tracking
+
+The `LeanAnalyticsPostHogObserver` extends PostHog's `PosthogObserver` to track screen views for routes implementing `LeanAnalyticsRoute`.
+
+### Implementing LeanAnalyticsRoute
+
+<CodeGroup>
+
+```dart With GoRouter
+class CheckoutRoute extends GoRoute implements LeanAnalyticsRoute {
+  CheckoutRoute()
+      : super(
+          path: '/checkout',
+          builder: (context, state) => const CheckoutScreen(),
+        );
+
+  @override
+  String get id => 'checkout_screen';
+
+  @override
+  Map<String, dynamic>? get analyticsParams => {
+        'step': 'payment',
+        'cart_value': 149.99,
+      };
+}
+```
+
+```dart With Named Routes
+class ProfileRoute implements LeanAnalyticsRoute, MaterialPageRoute {
+  ProfileRoute()
+      : super(
+          builder: (context) => const ProfileScreen(),
+        );
+
+  @override
+  String get id => 'profile_screen';
+
+  @override
+  Map<String, dynamic>? get analyticsParams => {
+        'source': 'navigation_drawer',
+      };
+}
+```
+
+</CodeGroup>
+
+### Screen View with Parameters
+
+The observer automatically includes `analyticsParams` in screen view events:
+
+```dart
+class SearchResultsRoute extends GoRoute implements LeanAnalyticsRoute {
+  SearchResultsRoute(this.query, this.resultsCount)
+      : super(
+          path: '/search',
+          builder: (context, state) => SearchResultsScreen(query: query),
+        );
+
+  final String query;
+  final int resultsCount;
+
+  @override
+  String get id => 'search_results_screen';
+
+  @override
+  Map<String, dynamic>? get analyticsParams => {
+        'query': query,
+        'results_count': resultsCount,
+        'search_type': 'instant',
+      };
+}
+```
+
+## Implementation Details
+
+### PostHogLeanAnalytics Class
+
+The main implementation class:
+
+```dart lib/src/posthog_analytics.dart
+class PostHogLeanAnalytics implements LeanAnalytics {
+  @override
+  Future<void> register(AnalyticsEvent event) async {
+    await Posthog().capture(
+      eventName: event.name,
+      properties: event.params,
+    );
+  }
+
+  @override
+  List<NavigatorObserver> get navigatorObservers => [
+    LeanAnalyticsPostHogObserver(),
+  ];
+}
+```
+
+### Navigation Observer
+
+Extends PostHog's observer to track `LeanAnalyticsRoute` implementations:
+
+```dart lib/src/posthog_analytics_observer.dart
+class LeanAnalyticsPostHogObserver extends PosthogObserver {
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is LeanAnalyticsRoute) {
+      _sendLeanAnalyticsScreen(route as LeanAnalyticsRoute);
+    }
+    super.didPush(route, previousRoute);
+  }
+
+  void _sendLeanAnalyticsScreen(LeanAnalyticsRoute route) {
+    final params = route.analyticsParams;
+    final properties = params?.map(
+      (key, value) => MapEntry<String, Object>(key, value as Object),
+    );
+    Posthog().screen(
+      screenName: route.id,
+      properties: properties,
+    );
+  }
+  
+  // Also implements didPop, didReplace, didRemove...
+}
+```
+
+<Accordion title="Why extend PosthogObserver?">
+  By extending `PosthogObserver`, we get all the built-in PostHog tracking features (like automatic screen capture) while adding support for `LeanAnalyticsRoute`. This gives you the best of both worlds: LeanCode's clean API and PostHog's powerful features.
+</Accordion>
+
+## Advanced Features
+
+### User Identification
+
+Identify users for better analytics:
+
+```dart
+// Identify user after login
+await Posthog().identify(
+  userId: 'user_123',
+  userProperties: {
+    'email': 'user@example.com',
+    'name': 'John Doe',
+    'plan': 'premium',
+  },
+);
+
+// Track login event
+analytics.register(
+  LoginAnalyticsEvent(userId: 'user_123'),
+);
+```
+
+### Feature Flags
+
+Use PostHog's feature flags:
+
+```dart
+// Check if feature is enabled
+final isNewUIEnabled = await Posthog().isFeatureEnabled('new_ui');
+
+if (isNewUIEnabled) {
+  // Show new UI
+} else {
+  // Show old UI
+}
+
+// Get feature flag with payload
+final payload = await Posthog().getFeatureFlagPayload('ab_test_variant');
+```
+
+### Session Replay
+
+PostHog supports session replay to see exactly how users interact with your app:
+
+```dart
+// Start recording (usually automatic if enabled in setup)
+await Posthog().startRecording();
+
+// Stop recording
+await Posthog().stopRecording();
+```
+
+### Multiple Analytics Backends
+
+Combine PostHog with other analytics providers:
+
+```dart
+class MultiBackendAnalytics implements LeanAnalytics {
+  MultiBackendAnalytics(this._backends);
+  
+  final List<LeanAnalytics> _backends;
+
+  @override
+  void register(AnalyticsEvent event) {
+    for (final backend in _backends) {
+      backend.register(event);
+    }
+  }
+
+  @override
+  List<NavigatorObserver> get navigatorObservers =>
+      _backends.expand((b) => b.navigatorObservers).toList();
+}
+
+// Use both PostHog and Firebase
+final analytics = MultiBackendAnalytics([
+  PostHogLeanAnalytics(),
+  FirebaseLeanAnalytics(),
+]);
+```
+
+## Privacy & GDPR Compliance
+
+PostHog provides tools for privacy compliance:
+
+```dart
+// Opt user out of tracking
+await Posthog().optOut();
+
+// Opt user back in
+await Posthog().optIn();
+
+// Reset user data (e.g., on logout)
+await Posthog().reset();
+```
+
+## Testing
+
+### Mocking Analytics
+
+```dart
+class MockPostHogAnalytics implements LeanAnalytics {
+  final events = <AnalyticsEvent>[];
+  final screenViews = <String>[];
+
+  @override
+  void register(AnalyticsEvent event) {
+    events.add(event);
+  }
+
+  @override
+  List<NavigatorObserver> get navigatorObservers => [];
+}
+
+// In tests
+void main() {
+  test('tracks subscription purchase', () {
+    final analytics = MockPostHogAnalytics();
+    final service = SubscriptionService(analytics);
+    
+    service.purchaseSubscription('premium');
+    
+    expect(analytics.events, hasLength(1));
+    expect(analytics.events.first.name, 'subscription_purchased');
+    expect(analytics.events.first.params['plan_id'], 'premium');
+  });
+}
+```
+
+### Disable in Development
+
+```dart
+final analytics = kDebugMode
+    ? MockPostHogAnalytics()
+    : PostHogLeanAnalytics();
+```
+
+## Troubleshooting
+
+<Accordion title="Events not appearing in PostHog">
+  - Verify your API key and host URL are correct
+  - Check that PostHog is initialized before calling `register()`
+  - Events are batched and flushed periodically - wait a few minutes or call `Posthog().flush()`
+  - Enable debug mode in PostHog setup to see logs
+</Accordion>
+
+<Accordion title="Screen views not tracked">
+  - Ensure your routes implement `LeanAnalyticsRoute`
+  - Verify `navigatorObservers` is added to your MaterialApp or router
+  - Check that the route's `id` property returns a non-empty string
+</Accordion>
+
+<Accordion title="Performance concerns">
+  - PostHog batches events automatically to minimize network calls
+  - Adjust `flushIntervalSeconds` in setup if needed
+  - Consider implementing conditional tracking to disable in debug mode
+</Accordion>
+
+## Package Information
+
+- **Version:** 0.1.0+1
+- **Minimum Dart SDK:** 3.5.0
+- **Minimum Flutter:** 3.24.0
+- **Dependencies:**
+  - `posthog_flutter: ^5.6.0`
+  - `leancode_analytics_base: 0.1.0`
+- **Repository:** [flutter_corelibrary](https://github.com/leancodepl/flutter_corelibrary)
+
+## Related Packages
+
+<CardGroup cols={2}>
+  <Card title="leancode_analytics_base" icon="layer-group" href="/packages/leancode-analytics-base">
+    Core analytics abstractions and interfaces
+  </Card>
+  <Card title="leancode_analytics_firebase" icon="fire" href="/packages/leancode-analytics-firebase">
+    Firebase analytics backend implementation
+  </Card>
+</CardGroup>
+
+## Resources
+
+- [PostHog Documentation](https://posthog.com/docs)
+- [PostHog Flutter SDK](https://posthog.com/docs/libraries/flutter)
+- [Session Replay Guide](https://posthog.com/docs/session-replay)
+- [Feature Flags Guide](https://posthog.com/docs/feature-flags)

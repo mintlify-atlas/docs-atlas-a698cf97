@@ -1,0 +1,390 @@
+---
+title: Enhanced Gradients
+description: Create smoother, more visually appealing gradients in Flutter by interpolating colors in the HCT color space using Material Design's color system.
+---
+
+# Enhanced Gradients
+
+Enhance your Flutter gradients with perceptually smoother color transitions by interpolating colors in the HCT (Hue, Chroma, Tone) color space provided by Material Design.
+
+## Installation
+
+Add the package to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  enhanced_gradients: ^2.0.0
+```
+
+## Import
+
+```dart
+import 'package:enhanced_gradients/enhanced_gradients.dart';
+```
+
+## Understanding HCT Color System
+
+The HCT color system is part of Material Design 3 and provides a more perceptually uniform way to interpolate between colors compared to traditional RGB or HSL interpolation.
+
+<Note>
+**HCT stands for:**
+- **H**ue: The color's position on the color wheel (0-360 degrees)
+- **C**hroma: The color's colorfulness or saturation
+- **T**one: The color's lightness (perceptually uniform)
+</Note>
+
+When you interpolate between colors in HCT space, the transitions appear smoother and more natural to the human eye, especially when transitioning between different hues.
+
+## Usage
+
+There are two ways to create enhanced gradients:
+
+### 1. Extension Method
+
+Use the `.enhanced()` extension on existing gradient objects:
+
+<CodeGroup>
+
+```dart Linear Gradient
+LinearGradient(
+  colors: const [
+    Color(0xFF6200EE),
+    Color(0xFF03DAC6),
+  ],
+).enhanced()
+```
+
+```dart Radial Gradient
+RadialGradient(
+  colors: const [
+    Color(0xFFFF0000),
+    Color(0xFF0000FF),
+  ],
+).enhanced()
+```
+
+```dart Sweep Gradient
+SweepGradient(
+  colors: const [
+    Color(0xFFFFEB3B),
+    Color(0xFFE91E63),
+    Color(0xFFFFEB3B),
+  ],
+).enhanced()
+```
+
+</CodeGroup>
+
+### 2. Enhanced Gradient Classes
+
+Use the dedicated `Enhanced*Gradient` classes:
+
+<CodeGroup>
+
+```dart EnhancedLinearGradient
+EnhancedLinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: const [
+    Color(0xFF000000),
+    Color(0xFFFFFFFF),
+  ],
+)
+```
+
+```dart EnhancedRadialGradient
+EnhancedRadialGradient(
+  center: Alignment.center,
+  radius: 0.8,
+  colors: const [
+    Color(0xFF4CAF50),
+    Color(0xFF2196F3),
+  ],
+)
+```
+
+```dart EnhancedSweepGradient
+EnhancedSweepGradient(
+  center: Alignment.center,
+  startAngle: 0,
+  endAngle: math.pi * 2,
+  colors: const [
+    Color(0xFFF44336),
+    Color(0xFFFFEB3B),
+    Color(0xFF4CAF50),
+  ],
+)
+```
+
+</CodeGroup>
+
+## Examples
+
+### Basic Example
+
+Here's a simple comparison between a regular gradient and an enhanced gradient:
+
+```dart
+class GradientComparison extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colors = [
+      Color(0xFF6200EE),
+      Color(0xFF03DAC6),
+    ];
+    
+    return Row(
+      children: [
+        // Regular gradient
+        Expanded(
+          child: Container(
+            height: 200,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: colors,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ),
+        
+        // Enhanced gradient
+        Expanded(
+          child: Container(
+            height: 200,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: colors,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ).enhanced(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+```
+
+### Complete Example from Source
+
+The following example demonstrates a gradient comparison tool:
+
+```dart
+class GradientShowcase extends StatefulWidget {
+  @override
+  State<GradientShowcase> createState() => _GradientShowcaseState();
+}
+
+class _GradientShowcaseState extends State<GradientShowcase> {
+  List<Color> _colors = [
+    Color(0xFF6200EE),
+    Color(0xFF03DAC6),
+  ];
+  
+  @override
+  Widget build(BuildContext context) {
+    final linearGradient = LinearGradient(
+      colors: _colors,
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+    );
+    
+    final radialGradient = RadialGradient(colors: _colors);
+    final sweepGradient = SweepGradient(colors: _colors);
+    
+    return Scaffold(
+      body: ListView(
+        children: [
+          Text(
+            'Regular gradient vs Enhanced gradient',
+            textAlign: TextAlign.center,
+          ),
+          // Linear comparison
+          _GradientComparison(
+            gradientA: linearGradient,
+            gradientB: linearGradient.enhanced(),
+          ),
+          // Radial comparison
+          _GradientComparison(
+            gradientA: radialGradient,
+            gradientB: radialGradient.enhanced(),
+          ),
+          // Sweep comparison
+          _GradientComparison(
+            gradientA: sweepGradient,
+            gradientB: sweepGradient.enhanced(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+## Advanced Configuration
+
+### Approximation Subdivisions
+
+You can control the smoothness of the gradient by adjusting the approximation subdivisions:
+
+<Tabs>
+  <Tab title="Per Gradient">
+    ```dart
+    EnhancedLinearGradient(
+      colors: colors,
+      approximationSubdivisions: 8, // Higher = smoother (default: 6)
+    )
+    
+    // Or with extension:
+    LinearGradient(colors: colors).enhanced(
+      approximationSubdivisions: 8,
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Global Configuration">
+    ```dart
+    // Set globally for all enhanced gradients
+    void main() {
+      EnhancedGradientsGlobalConfig.approximationSubdivisions = 8;
+      runApp(MyApp());
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+Higher subdivision values create smoother gradients but may impact performance. The default value of 6 provides a good balance.
+</Tip>
+
+## HctColorTween for Animations
+
+Use `HctColorTween` instead of `ColorTween` for smoother color transitions in animations:
+
+```dart
+class AnimatedColorBox extends StatefulWidget {
+  @override
+  State<AnimatedColorBox> createState() => _AnimatedColorBoxState();
+}
+
+class _AnimatedColorBoxState extends State<AnimatedColorBox>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Color?> _colorAnimation;
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    // Use HctColorTween for smoother transitions
+    _colorAnimation = HctColorTween(
+      begin: Color(0xFF6200EE),
+      end: Color(0xFF03DAC6),
+    ).animate(_controller);
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _colorAnimation,
+      builder: (context, child) {
+        return Container(
+          width: 200,
+          height: 200,
+          color: _colorAnimation.value,
+        );
+      },
+    );
+  }
+  
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}
+```
+
+## Visual Comparison
+
+The package includes visual examples showing the difference between regular and enhanced gradients. Here's what you can expect:
+
+<Note>
+**Regular Gradient Issues:**
+- May show muddy or grayish transitions between complementary colors
+- Uneven perceived brightness changes
+- Less vibrant intermediate colors
+
+**Enhanced Gradient Benefits:**
+- Cleaner, more vibrant transitions
+- Perceptually uniform brightness changes
+- More natural-looking color progressions
+</Note>
+
+### When to Use Enhanced Gradients
+
+<Steps>
+  <Step title="Complementary colors">
+    When transitioning between opposite colors on the color wheel (e.g., blue to orange)
+  </Step>
+  
+  <Step title="Multiple color stops">
+    When using gradients with three or more colors
+  </Step>
+  
+  <Step title="Brand colors">
+    When working with specific brand colors that need to look perfect
+  </Step>
+  
+  <Step title="Material Design 3">
+    When building apps following Material Design 3 guidelines
+  </Step>
+</Steps>
+
+## API Reference
+
+### Extension Methods
+
+```dart
+extension EnhancedLinearGradientExtension on LinearGradient {
+  LinearGradient enhanced({int? approximationSubdivisions});
+}
+
+extension EnhancedRadialGradientExtension on RadialGradient {
+  RadialGradient enhanced({int? approximationSubdivisions});
+}
+
+extension EnhancedSweepGradientExtension on SweepGradient {
+  SweepGradient enhanced({int? approximationSubdivisions});
+}
+```
+
+### Helper Functions
+
+```dart
+// Linearly interpolate colors in HCT color space
+Color? lerpHct(Color? colorA, Color? colorB, double t);
+```
+
+## Performance Considerations
+
+- Enhanced gradients perform color interpolation during construction
+- The result is cached, so there's no runtime performance impact
+- Higher approximation subdivisions slightly increase construction time
+- Memory usage is comparable to regular gradients
+
+## Related Resources
+
+- [Material Design 3 Color System](https://m3.material.io/styles/color/the-color-system/color-roles)
+- [material_color_utilities](https://pub.dev/packages/material_color_utilities) - The underlying color system
+
+## Source Code
+
+View the source code on [GitHub](https://github.com/leancodepl/flutter_corelibrary/tree/master/packages/enhanced_gradients).

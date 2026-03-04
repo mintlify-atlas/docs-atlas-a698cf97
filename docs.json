@@ -1,122 +1,95 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Flutter CoreLibrary",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#aaaaa7",
+    "light": "#4e463d",
+    "dark": "#1b265f"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/0869dd26-7671-49f6-9197-19d3aad74592.jpg",
+  "logo": {
+    "light": "https://media.brand.dev/f8fb9579-44a1-4b9b-870a-8b100336397c.png",
+    "dark": "https://media.brand.dev/f8fb9579-44a1-4b9b-870a-8b100336397c.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/leancodepl/flutter_corelibrary"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/leancodepl/flutter_corelibrary"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Packages",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "packages/cqrs",
+              "packages/login-client",
+              "packages/login-client-flutter"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "UI & Hooks",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "packages/leancode-hooks",
+              "packages/enhanced-gradients",
+              "packages/leancode-markup",
+              "packages/leancode-flutter-svg-adaptive-loader"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Analytics & Tracking",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "packages/leancode-analytics-base",
+              "packages/leancode-analytics-firebase",
+              "packages/leancode-analytics-posthog"
+            ]
+          },
+          {
+            "group": "Developer Tools",
+            "pages": [
+              "packages/leancode-lint",
+              "packages/leancode-debug-page",
+              "packages/override-api-endpoint"
+            ]
+          },
+          {
+            "group": "App Features",
+            "pages": [
+              "packages/leancode-force-update"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Guides",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Guides",
             "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "guides/getting-started-with-cqrs",
+              "guides/authentication-setup",
+              "guides/analytics-integration",
+              "guides/custom-lint-configuration"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

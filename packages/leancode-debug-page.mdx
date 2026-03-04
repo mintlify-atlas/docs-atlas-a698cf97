@@ -1,0 +1,379 @@
+---
+title: LeanCode Debug Page
+description: A comprehensive debug page that gathers and displays HTTP requests, logger logs, and diagnostic information for Flutter applications.
+---
+
+# LeanCode Debug Page
+
+A debug page that gathers HTTP requests and logger logs with detailed filtering, sharing capabilities, and configurable entry points. Essential for debugging network requests and application logs during development and testing.
+
+## Features
+
+- **HTTP Request Tracking**: Capture and display detailed information about all HTTP requests and responses
+- **Logger Integration**: Gather and display logs from the `logging` package
+- **Advanced Filtering**:
+  - Requests by status code and search query
+  - Logs by log level and search query
+- **Sharing Capabilities**:
+  - Share all logs or requests
+  - Share individual items
+- **Flexible Entry Points**:
+  - Draggable floating action button
+  - Device shake detection
+
+## Installation
+
+<Steps>
+  <Step title="Add dependency">
+    Add `leancode_debug_page` to your `pubspec.yaml`:
+
+    ```bash
+    flutter pub add leancode_debug_page
+    ```
+  </Step>
+
+  <Step title="Update your app">
+    Follow the integration steps below to set up the debug page in your application.
+  </Step>
+</Steps>
+
+## Integration
+
+<Steps>
+  <Step title="Create LoggingHttpClient">
+    Wrap your HTTP client with `LoggingHttpClient` to enable request tracking:
+
+    ```dart
+    import 'package:leancode_debug_page/leancode_debug_page.dart';
+    import 'package:http/http.dart' as http;
+
+    final loggingHttpClient = LoggingHttpClient(
+      client: http.Client(), // Optional: provide your own client
+    );
+    ```
+
+    <Note>
+      `LoggingHttpClient` is a wrapper over the standard `http.Client` that logs all requests and responses while maintaining full compatibility with the HTTP package.
+    </Note>
+  </Step>
+
+  <Step title="Create DebugPageController">
+    Initialize the controller with your logging client and navigator key:
+
+    ```dart
+    class _MyAppState extends State<MyApp> {
+      final navigatorKey = GlobalKey<NavigatorState>();
+      late DebugPageController _debugPageController;
+
+      @override
+      void initState() {
+        super.initState();
+
+        _debugPageController = DebugPageController(
+          showEntryButton: true,  // Show floating button
+          showOnShake: true,      // Enable shake detection
+          loggingHttpClient: widget._loggingHttpClient,
+          navigatorKey: navigatorKey,
+        );
+      }
+
+      @override
+      void dispose() {
+        _debugPageController.dispose();
+        super.dispose();
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Wrap MaterialApp with DebugPageOverlay">
+    Add the overlay and configure the navigator:
+
+    ```dart
+    @override
+    Widget build(BuildContext context) {
+      return DebugPageOverlay(
+        controller: _debugPageController,
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          navigatorObservers: [_debugPageController.navigatorObserver],
+          home: MyHomePage(
+            loggingHttpClient: widget._loggingHttpClient,
+          ),
+        ),
+      );
+    }
+    ```
+
+    <Warning>
+      **Important:** You must pass `_debugPageController.navigatorObserver` to the `navigatorObservers` list for the debug page to function correctly.
+    </Warning>
+  </Step>
+</Steps>
+
+## Complete Example
+
+<CodeGroup>
+```dart main.dart
+import 'package:flutter/material.dart';
+import 'package:leancode_debug_page/leancode_debug_page.dart';
+
+void main() {
+  final loggingHttpClient = LoggingHttpClient();
+  runApp(MyApp(loggingHttpClient: loggingHttpClient));
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({
+    super.key,
+    required LoggingHttpClient loggingHttpClient,
+  }) : _loggingHttpClient = loggingHttpClient;
+
+  final LoggingHttpClient _loggingHttpClient;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final navigatorKey = GlobalKey<NavigatorState>();
+  late DebugPageController _debugPageController;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _debugPageController = DebugPageController(
+      showEntryButton: true,
+      loggingHttpClient: widget._loggingHttpClient,
+      navigatorKey: navigatorKey,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DebugPageOverlay(
+      controller: _debugPageController,
+      child: MaterialApp(
+        title: 'Debug Page Demo',
+        navigatorKey: navigatorKey,
+        navigatorObservers: [_debugPageController.navigatorObserver],
+        home: MyHomePage(
+          loggingHttpClient: widget._loggingHttpClient,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _debugPageController.dispose();
+    super.dispose();
+  }
+}
+```
+
+```dart making_requests.dart
+import 'package:leancode_debug_page/leancode_debug_page.dart';
+
+class MyHomePage extends StatelessWidget {
+  const MyHomePage({super.key, required this.loggingHttpClient});
+
+  final LoggingHttpClient loggingHttpClient;
+
+  Future<void> makeRequest() async {
+    // All requests are automatically logged
+    final response = await loggingHttpClient.get(
+      Uri.parse('https://api.example.com/data'),
+    );
+    print('Response: ${response.body}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Debug Page Example')),
+      body: Center(
+        child: ElevatedButton(
+          onPressed: makeRequest,
+          child: const Text('Make API Request'),
+        ),
+      ),
+    );
+  }
+}
+```
+</CodeGroup>
+
+## Configuration
+
+### DebugPageController Options
+
+<Card title="Entry Point Configuration" icon="door-open">
+  ```dart
+  DebugPageController(
+    showEntryButton: true,  // default: false
+    showOnShake: true,      // default: true
+    ignoredBasePath: '/api',
+    loggingHttpClient: loggingHttpClient,
+    navigatorKey: navigatorKey,
+  )
+  ```
+
+  **Parameters:**
+  - `showEntryButton`: Display a draggable floating action button for quick access
+  - `showOnShake`: Enable shake gesture to open the debug page (requires `sensors_plus`)
+  - `ignoredBasePath`: Optional base path to exclude from request URLs in the display
+</Card>
+
+### Shake Detection
+
+By default, shaking your device will open the debug page. The shake detector uses:
+- **Threshold:** 4 gravity units
+- **Auto-start:** Automatically begins listening when enabled
+- **Auto-stop:** Stops listening when controller is disposed
+
+To disable shake detection:
+```dart
+DebugPageController(
+  showOnShake: false,
+  // ... other parameters
+)
+```
+
+## Debug Information Exposed
+
+### HTTP Requests
+
+For each HTTP request, the debug page displays:
+
+- **Request Details**:
+  - HTTP method (GET, POST, PUT, DELETE, etc.)
+  - Full URL
+  - Request headers
+  - Request body (for applicable methods)
+  - Timestamp (start time)
+
+- **Response Details**:
+  - Status code
+  - Response headers
+  - Response body
+  - Duration (time taken)
+
+- **Filtering**:
+  - Filter by status code ranges (1xx, 2xx, 3xx, 4xx, 5xx)
+  - Search by URL or content
+
+### Logger Logs
+
+The debug page captures logs from `Logger.root`:
+
+- **Log Information**:
+  - Log level (SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST)
+  - Message
+  - Timestamp
+  - Logger name
+  - Error and stack trace (if available)
+
+- **Filtering**:
+  - Filter by log level
+  - Search by message content
+
+<Warning>
+  **Logger Integration:** This package listens to `Logger.root`. Changing `Logger.root.level` affects the debug page's behavior. Logs are only collected from the current isolate.
+</Warning>
+
+## API Reference
+
+### LoggingHttpClient
+
+```dart
+class LoggingHttpClient extends http.BaseClient {
+  LoggingHttpClient({http.Client? client});
+
+  // Access all logged requests
+  List<RequestLogRecord> get logs;
+  Stream<List<RequestLogRecord>> get logStream;
+
+  // Clear all logged requests
+  void clear();
+}
+```
+
+### DebugPageController
+
+```dart
+class DebugPageController {
+  DebugPageController({
+    bool showEntryButton = false,
+    bool showOnShake = true,
+    String? ignoredBasePath,
+    required LoggingHttpClient loggingHttpClient,
+    required GlobalKey<NavigatorState> navigatorKey,
+  });
+
+  // Navigation observer (must be added to MaterialApp)
+  NavigatorObserver get navigatorObserver;
+
+  // Programmatically open/close debug page
+  void open();
+  void close();
+
+  // Clear logs
+  void clearRequestsLogs();
+  void clearLoggerLogs();
+
+  // Filters
+  ValueNotifier<List<Filter<RequestLogRecord>>> requestsFilters;
+  ValueNotifier<List<Filter<LogRecord>>> loggerFilters;
+
+  // Dispose when done
+  void dispose();
+}
+```
+
+## Use Cases
+
+<Accordion title="Network Debugging">
+  View all API requests and responses in real-time. Useful for:
+  - Debugging API integration issues
+  - Verifying request/response payloads
+  - Checking authentication headers
+  - Monitoring response times
+</Accordion>
+
+<Accordion title="Log Analysis">
+  Collect and filter application logs. Perfect for:
+  - Troubleshooting runtime issues
+  - Monitoring error patterns
+  - Reviewing debug information
+  - Sharing logs with team members
+</Accordion>
+
+<Accordion title="QA and Testing">
+  Enable QA teams to:
+  - Report issues with detailed network logs
+  - Share complete request/response data
+  - Filter and search through logs efficiently
+  - Verify API behavior without development tools
+</Accordion>
+
+## Package Information
+
+- **Latest Version:** 3.1.0+1
+- **Minimum Dart SDK:** 3.6.0
+- **Minimum Flutter:** 3.27.0
+- **Repository:** [GitHub](https://github.com/leancodepl/flutter_corelibrary)
+- **Pub.dev:** [leancode_debug_page](https://pub.dev/packages/leancode_debug_page)
+
+### Dependencies
+
+- `http`: ^1.1.0 - HTTP client integration
+- `logging`: ^1.2.0 - Logger integration
+- `rxdart`: ^0.28.0 - Reactive stream handling
+- `sensors_plus`: ^6.0.0 - Shake detection
+- `share_plus`: ^10.0.0 - Sharing capabilities
+
+<Note>
+  The debug page automatically uses the current isolate's logger. Make sure your logging setup directs logs to `Logger.root` for them to appear in the debug page.
+</Note>

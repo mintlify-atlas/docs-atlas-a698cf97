@@ -1,0 +1,774 @@
+---
+title: Custom Lint Configuration
+description: A comprehensive guide to configuring and customizing LeanCode Lint rules for enforcing code quality standards in your Flutter projects
+---
+
+LeanCode Lint provides an opinionated set of high-quality lint rules for Flutter and Dart projects. This guide covers installation, configuration, and creating custom lint plugins with project-specific rules.
+
+## What is LeanCode Lint?
+
+LeanCode Lint is a collection of:
+
+- **Static analysis rules** - Enforce code quality and consistency
+- **Custom lint rules** - Project-specific best practices (e.g., design system enforcement, hook usage)
+- **Code assists** - IDE refactorings for common patterns
+- **Analyzer plugin** - Configurable rules beyond YAML settings
+
+## Installation
+
+<Steps>
+  <Step title="Add the dependency">
+    Add `leancode_lint` as a dev dependency:
+
+    ```bash
+    dart pub add leancode_lint --dev
+    ```
+  </Step>
+
+  <Step title="Include lint rules">
+    Create or update `analysis_options.yaml` in your project root:
+
+    ```yaml
+    include: package:leancode_lint/analysis_options.yaml
+    ```
+  </Step>
+
+  <Step title="Enable the analyzer plugin">
+    Add the plugin to `analysis_options.yaml`:
+
+    ```yaml
+    include: package:leancode_lint/analysis_options.yaml
+
+    plugins:
+      leancode_lint: ^20.0.0
+
+    analyzer:
+      exclude:
+        - '**/*.g.dart'
+        - '**/*.freezed.dart'
+    ```
+  </Step>
+
+  <Step title="Restart the analysis server">
+    Run this command and restart your IDE:
+
+    ```bash
+    flutter pub get
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  You now have LeanCode Lint enabled with default configuration!
+</Note>
+
+## Configuration Options
+
+### Default Configuration (As-Is)
+
+Use the built-in rules with default settings:
+
+```yaml
+include: package:leancode_lint/analysis_options.yaml
+
+plugins:
+  leancode_lint: ^20.0.0
+
+analyzer:
+  exclude:
+    - '**/*.g.dart'
+    - '**/*.freezed.dart'
+```
+
+This gives you all LeanCode Lint rules with sensible defaults.
+
+### Library/Package Configuration
+
+If you're building a library (not an app), use the package-optimized rules:
+
+```yaml
+include: package:leancode_lint/analysis_options_package.yaml
+
+plugins:
+  leancode_lint: ^20.0.0
+```
+
+<Tip>
+  The package variant includes rules for public API documentation and stricter visibility checks.
+</Tip>
+
+### Disabling Specific Rules
+
+Disable individual rules in `analysis_options.yaml`:
+
+```yaml
+include: package:leancode_lint/analysis_options.yaml
+
+plugins:
+  leancode_lint:
+    version: ^20.0.0
+    diagnostics:
+      # Disable specific custom lint rules
+      prefix_widgets_returning_slivers: false
+      use_design_system_item: false
+      avoid_conditional_hooks: false
+```
+
+## Custom Plugin Package
+
+For advanced configuration, create your own analyzer plugin package that extends LeanCode Lint.
+
+### Why Create a Custom Plugin?
+
+Custom plugins allow you to:
+
+- Configure rules programmatically (not just enable/disable)
+- Enforce design system conventions
+- Customize error messages and parameter names
+- Share configuration across multiple projects
+
+### Creating a Custom Plugin
+
+<Steps>
+  <Step title="Create the plugin package">
+    Create a new Dart package for your custom lints:
+
+    ```bash
+    mkdir my_lints
+    cd my_lints
+    dart create -t package .
+    ```
+  </Step>
+
+  <Step title="Add leancode_lint dependency">
+    Update `my_lints/pubspec.yaml`:
+
+    ```yaml
+    name: my_lints
+    description: Custom lint rules for my project
+    version: 1.0.0
+
+    environment:
+      sdk: '>=3.0.0 <4.0.0'
+
+    dependencies:
+      leancode_lint: ^20.0.0
+    ```
+  </Step>
+
+  <Step title="Create the plugin">
+    Create `my_lints/lib/main.dart`:
+
+    ```dart
+    import 'package:leancode_lint/plugin.dart';
+
+    final plugin = LeanCodeLintPlugin(
+      name: 'my_lints',
+      config: const LeanCodeLintConfig(
+        applicationPrefix: 'App',
+        catchParameterNames: CatchParameterNamesConfig(
+          exception: 'error',
+          stackTrace: 'stackTrace',
+        ),
+        designSystemItemReplacements: {
+          'AppText': [
+            DesignSystemForbiddenItem(name: 'Text', packageName: 'flutter'),
+            DesignSystemForbiddenItem(name: 'RichText', packageName: 'flutter'),
+          ],
+          'AppScaffold': [
+            DesignSystemForbiddenItem(name: 'Scaffold', packageName: 'flutter'),
+          ],
+        },
+      ),
+    );
+    ```
+  </Step>
+
+  <Step title="Use the custom plugin">
+    In your app's `analysis_options.yaml`:
+
+    ```yaml
+    include: package:leancode_lint/analysis_options.yaml
+
+    plugins:
+      my_lints:
+        path: ./path/to/my_lints
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  When using a custom plugin, enable YOUR plugin (e.g., `my_lints`), not `leancode_lint`!
+</Warning>
+
+## Configuration Parameters
+
+### Application Prefix
+
+Set a prefix for your app-specific widgets:
+
+```dart
+LeanCodeLintConfig(
+  applicationPrefix: 'Lncd',
+)
+```
+
+**Effect:** Allows widgets like `LncdSliverList` to satisfy the `prefix_widgets_returning_slivers` rule.
+
+### Catch Parameter Names
+
+Enforce consistent naming for exception handling:
+
+```dart
+LeanCodeLintConfig(
+  catchParameterNames: CatchParameterNamesConfig(
+    exception: 'error',      // Default: 'err'
+    stackTrace: 'stackTrace', // Default: 'st'
+  ),
+)
+```
+
+<Tabs>
+  <Tab title="Default Config">
+    ```dart
+    // With default config
+    try {
+      riskyOperation();
+    } catch (err, st) {
+      logger.error('Failed', err, st);
+    }
+    ```
+  </Tab>
+
+  <Tab title="Custom Config">
+    ```dart
+    // With custom config (exception: 'error', stackTrace: 'stackTrace')
+    try {
+      riskyOperation();
+    } catch (error, stackTrace) {
+      logger.error('Failed', error, stackTrace);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Design System Item Replacements
+
+Enforce custom design system widgets:
+
+```dart
+LeanCodeLintConfig(
+  designSystemItemReplacements: {
+    'AppText': [
+      DesignSystemForbiddenItem(name: 'Text', packageName: 'flutter'),
+      DesignSystemForbiddenItem(name: 'RichText', packageName: 'flutter'),
+    ],
+    'AppButton': [
+      DesignSystemForbiddenItem(name: 'ElevatedButton', packageName: 'flutter'),
+      DesignSystemForbiddenItem(name: 'TextButton', packageName: 'flutter'),
+    ],
+    'AppScaffold': [
+      DesignSystemForbiddenItem(name: 'Scaffold', packageName: 'flutter'),
+    ],
+  },
+)
+```
+
+**Effect:**
+
+```dart
+// ❌ Error: Use AppText instead of Text
+Widget build(BuildContext context) {
+  return Text('Hello');
+}
+
+// ✅ Correct
+Widget build(BuildContext context) {
+  return AppText('Hello');
+}
+```
+
+### Bloc Related Class Naming
+
+Configure naming conventions for BLoC classes:
+
+```dart
+LeanCodeLintConfig(
+  blocRelatedClassNaming: BlocRelatedClassNamingConfig(
+    stateSuffix: 'State',
+    eventSuffix: 'Event',
+    presentationEventSuffix: 'PresentationEvent',
+  ),
+)
+```
+
+**Effect:**
+
+```dart
+// For CounterBloc, these classes must be named:
+class CounterEvent {}   // Event class
+class CounterState {}   // State class
+class CounterPresentationEvent {}  // Presentation event (if using bloc_presentation)
+```
+
+## Complete Configuration Example
+
+<CodeGroup>
+```dart my_lints/lib/main.dart
+import 'package:leancode_lint/plugin.dart';
+
+/// Custom LeanCode Lint plugin for MyCompany projects.
+///
+/// Configuration:
+/// - Application prefix: "Mc" (for MyCompany)
+/// - Catch parameters: error/stackTrace
+/// - Design system: Enforces Mc* widgets
+final plugin = LeanCodeLintPlugin(
+  name: 'my_company_lints',
+  config: const LeanCodeLintConfig(
+    applicationPrefix: 'Mc',
+    
+    catchParameterNames: CatchParameterNamesConfig(
+      exception: 'error',
+      stackTrace: 'stackTrace',
+    ),
+    
+    blocRelatedClassNaming: BlocRelatedClassNamingConfig(
+      stateSuffix: 'State',
+      eventSuffix: 'Event',
+      presentationEventSuffix: 'PresentationEvent',
+    ),
+    
+    designSystemItemReplacements: {
+      // Typography
+      'McText': [
+        DesignSystemForbiddenItem(name: 'Text', packageName: 'flutter'),
+        DesignSystemForbiddenItem(name: 'RichText', packageName: 'flutter'),
+      ],
+      
+      // Buttons
+      'McButton': [
+        DesignSystemForbiddenItem(name: 'ElevatedButton', packageName: 'flutter'),
+        DesignSystemForbiddenItem(name: 'TextButton', packageName: 'flutter'),
+        DesignSystemForbiddenItem(name: 'OutlinedButton', packageName: 'flutter'),
+      ],
+      
+      // Layout
+      'McScaffold': [
+        DesignSystemForbiddenItem(name: 'Scaffold', packageName: 'flutter'),
+      ],
+      
+      'McAppBar': [
+        DesignSystemForbiddenItem(name: 'AppBar', packageName: 'flutter'),
+      ],
+    },
+  ),
+);
+```
+
+```yaml my_lints/pubspec.yaml
+name: my_company_lints
+description: Custom lint rules for MyCompany Flutter projects
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  leancode_lint: ^20.0.0
+```
+
+```yaml app/analysis_options.yaml
+include: package:leancode_lint/analysis_options.yaml
+
+plugins:
+  my_company_lints:
+    path: ../my_company_lints
+
+analyzer:
+  exclude:
+    - '**/*.g.dart'
+    - '**/*.freezed.dart'
+    - 'lib/generated/**'
+  
+  strong-mode:
+    implicit-casts: false
+    implicit-dynamic: false
+
+linter:
+  rules:
+    # Additional project-specific rules
+    always_use_package_imports: true
+```
+</CodeGroup>
+
+## Custom Lint Rules Reference
+
+Here are the key custom lint rules provided by LeanCode Lint:
+
+<Accordion title="add_cubit_suffix_for_your_cubits">
+  **DO** add a 'Cubit' suffix to your cubit names.
+
+  ```dart
+  // ❌ Bad
+  class Counter extends Cubit<int> {}
+  
+  // ✅ Good
+  class CounterCubit extends Cubit<int> {}
+  ```
+
+  **Configuration:** None
+</Accordion>
+
+<Accordion title="avoid_conditional_hooks">
+  **AVOID** using hooks conditionally or after early returns.
+
+  ```dart
+  // ❌ Bad
+  Widget build(BuildContext context) {
+    if (condition) {
+      useEffect(() { /* ... */ }, []);
+    }
+  }
+  
+  // ✅ Good
+  Widget build(BuildContext context) {
+    useEffect(() {
+      if (condition) { /* ... */ }
+    }, []);
+  }
+  ```
+
+  **Configuration:** None
+</Accordion>
+
+<Accordion title="catch_parameter_names">
+  **DO** name catch clause parameters consistently.
+
+  ```dart
+  // ❌ Bad (with default config)
+  try {} catch (e, s) {}
+  
+  // ✅ Good (with default config)
+  try {} catch (err, st) {}
+  ```
+
+  **Configuration:** `CatchParameterNamesConfig`
+</Accordion>
+
+<Accordion title="use_design_system_item">
+  **AVOID** using items disallowed by the design system.
+
+  ```dart
+  // ❌ Bad (if AppText is configured)
+  return Text('Hello');
+  
+  // ✅ Good
+  return AppText('Hello');
+  ```
+
+  **Configuration:** `designSystemItemReplacements`
+</Accordion>
+
+<Accordion title="prefix_widgets_returning_slivers">
+  **DO** prefix widget names with 'Sliver' if the widget returns slivers.
+
+  ```dart
+  // ❌ Bad
+  class MyList extends StatelessWidget {
+    Widget build(BuildContext context) => SliverList(...);
+  }
+  
+  // ✅ Good
+  class SliverMyList extends StatelessWidget {
+    Widget build(BuildContext context) => SliverList(...);
+  }
+  ```
+
+  **Configuration:** `applicationPrefix` (allows `AppSliverMyList` format)
+</Accordion>
+
+<Accordion title="use_dedicated_media_query_methods">
+  **AVOID** using `MediaQuery.of` for single properties.
+
+  ```dart
+  // ❌ Bad
+  final size = MediaQuery.of(context).size;
+  
+  // ✅ Good
+  final size = MediaQuery.sizeOf(context);
+  ```
+
+  **Configuration:** None
+</Accordion>
+
+<Accordion title="prefer_equatable_mixin">
+  **DO** mix in `EquatableMixin` instead of extending `Equatable`.
+
+  ```dart
+  // ❌ Bad
+  class User extends Equatable {
+    final String name;
+    List<Object?> get props => [name];
+  }
+  
+  // ✅ Good
+  class User with EquatableMixin {
+    final String name;
+    List<Object?> get props => [name];
+  }
+  ```
+
+  **Configuration:** None
+</Accordion>
+
+<Warning>
+  See the [LeanCode Lint README](https://pub.dev/packages/leancode_lint) for the complete list of rules.
+</Warning>
+
+## Code Assists
+
+LeanCode Lint provides IDE refactorings (code actions):
+
+### Available Assists
+
+1. **Convert positional to named formal** - Convert positional parameters to named
+2. **Convert record into nominal type** - Extract record into a class
+3. **Convert iterable map to collection-for** - Refactor `.map()` to for loops
+
+### Using Assists
+
+In your IDE:
+
+- **VSCode**: Place cursor on code, press `Ctrl+.` or `⌘+.`
+- **Android Studio/IntelliJ**: Place cursor on code, press `Alt+Enter`
+
+## Real-World Examples
+
+### Example 1: Enforcing Design System
+
+<CodeGroup>
+```dart my_lints/lib/main.dart
+import 'package:leancode_lint/plugin.dart';
+
+final plugin = LeanCodeLintPlugin(
+  name: 'my_design_lints',
+  config: const LeanCodeLintConfig(
+    designSystemItemReplacements: {
+      'AppText': [
+        DesignSystemForbiddenItem(name: 'Text', packageName: 'flutter'),
+      ],
+      'AppButton': [
+        DesignSystemForbiddenItem(name: 'ElevatedButton', packageName: 'flutter'),
+        DesignSystemForbiddenItem(name: 'TextButton', packageName: 'flutter'),
+      ],
+    },
+  ),
+);
+```
+
+```dart lib/design_system/app_text.dart
+import 'package:flutter/material.dart';
+
+class AppText extends StatelessWidget {
+  const AppText(
+    this.data, {
+    this.style,
+    super.key,
+  });
+
+  final String data;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      data,
+      style: style ?? Theme.of(context).textTheme.bodyMedium,
+    );
+  }
+}
+```
+
+```dart lib/screens/home_screen.dart
+import 'package:flutter/material.dart';
+import '../design_system/app_text.dart';
+
+class HomeScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        // ✅ Uses design system widget
+        child: AppText('Welcome'),
+        
+        // ❌ This would trigger a lint error:
+        // child: Text('Welcome'),
+      ),
+    );
+  }
+}
+```
+</CodeGroup>
+
+### Example 2: Team-Wide Conventions
+
+```dart
+import 'package:leancode_lint/plugin.dart';
+
+final plugin = LeanCodeLintPlugin(
+  name: 'team_lints',
+  config: const LeanCodeLintConfig(
+    // All team members use 'error' and 'stackTrace'
+    catchParameterNames: CatchParameterNamesConfig(
+      exception: 'error',
+      stackTrace: 'stackTrace',
+    ),
+    
+    // All widgets start with 'App'
+    applicationPrefix: 'App',
+    
+    // Enforce consistent BLoC naming
+    blocRelatedClassNaming: BlocRelatedClassNamingConfig(
+      stateSuffix: 'State',
+      eventSuffix: 'Event',
+      presentationEventSuffix: 'PresentationEvent',
+    ),
+  ),
+);
+```
+
+## Sharing Configuration Across Projects
+
+### Option 1: Local Path
+
+For monorepos, use a path dependency:
+
+```yaml
+plugins:
+  my_lints:
+    path: ../../shared/my_lints
+```
+
+### Option 2: Git Dependency
+
+Host your lint package in a Git repository:
+
+```yaml
+plugins:
+  my_lints:
+    git:
+      url: https://github.com/mycompany/my_lints.git
+      ref: main
+```
+
+### Option 3: Publish to pub.dev
+
+Publish your custom lint package:
+
+```yaml
+plugins:
+  my_company_lints: ^1.0.0
+```
+
+## Debugging Lint Issues
+
+### Check Plugin Status
+
+Verify the analyzer plugin is running:
+
+```bash
+dart analyze
+```
+
+### View Analysis Server Logs
+
+In VSCode:
+1. Open Command Palette (`Cmd+Shift+P`)
+2. Run "Dart: Open DevTools"
+3. Check "Logging" tab
+
+### Common Issues
+
+<Accordion title="Plugin not running">
+  **Solution:** Ensure you've run `flutter pub get` and restarted your IDE.
+
+  ```bash
+  flutter pub get
+  # Then restart your IDE
+  ```
+</Accordion>
+
+<Accordion title="Rules not applying">
+  **Solution:** Check that you're enabling the correct plugin name:
+
+  ```yaml
+  # If using custom plugin
+  plugins:
+    my_lints:  # ← Your plugin name, not 'leancode_lint'
+      path: ./my_lints
+  ```
+</Accordion>
+
+<Accordion title="Conflicts with existing rules">
+  **Solution:** LeanCode Lint rules take precedence. Disable conflicting rules:
+
+  ```yaml
+  linter:
+    rules:
+      # Disable if it conflicts with leancode_lint
+      prefer_const_constructors: false
+  ```
+</Accordion>
+
+## Best Practices
+
+<Accordion title="Start with defaults, customize gradually">
+  Begin with default configuration and add custom rules as your team identifies patterns:
+
+  ```yaml
+  # Week 1: Start simple
+  include: package:leancode_lint/analysis_options.yaml
+  plugins:
+    leancode_lint: ^20.0.0
+  
+  # Week 4: Add custom plugin as patterns emerge
+  plugins:
+    my_lints:
+      path: ./my_lints
+  ```
+</Accordion>
+
+<Accordion title="Document your configuration">
+  Add comments explaining custom rules:
+
+  ```dart
+  final plugin = LeanCodeLintPlugin(
+    name: 'my_lints',
+    config: const LeanCodeLintConfig(
+      // We use 'error' instead of 'err' to match our logging framework
+      catchParameterNames: CatchParameterNamesConfig(
+        exception: 'error',
+        stackTrace: 'stackTrace',
+      ),
+    ),
+  );
+  ```
+</Accordion>
+
+<Accordion title="Run lints in CI/CD">
+  Add to your CI pipeline:
+
+  ```yaml
+  # .github/workflows/lint.yml
+  - name: Run analyzer
+    run: dart analyze --fatal-infos
+  ```
+</Accordion>
+
+## Next Steps
+
+- Explore [all available lint rules](https://pub.dev/packages/leancode_lint)
+- Set up [CQRS](/guides/getting-started-with-cqrs) with quality code
+- Add [authentication](/guides/authentication-setup) following best practices
+- Track code quality with [analytics](/guides/analytics-integration)

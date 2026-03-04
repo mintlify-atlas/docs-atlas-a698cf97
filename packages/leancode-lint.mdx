@@ -1,0 +1,503 @@
+---
+title: LeanCode Lint
+description: Opinionated set of high-quality, robust lint rules and assists for Flutter development used at LeanCode.
+---
+
+# LeanCode Lint
+
+An opinionated set of high-quality, robust, and up-to-date lint rules used at LeanCode. This package provides custom lint rules, assists, and a comprehensive analyzer configuration for Flutter and Dart projects.
+
+## Installation
+
+<Steps>
+  <Step title="Add dependency">
+    Add `leancode_lint` as a dev dependency in your project's `pubspec.yaml`:
+
+    ```bash
+    dart pub add leancode_lint --dev
+    ```
+  </Step>
+
+  <Step title="Configure analysis_options.yaml">
+    Include the package in your `analysis_options.yaml` and enable the analyzer plugin:
+
+    ```yaml analysis_options.yaml
+    include: package:leancode_lint/analysis_options.yaml
+
+    plugins:
+      leancode_lint: ^21.0.0
+
+    analyzer:
+      exclude:
+        - '**/*.g.dart'
+    ```
+  </Step>
+
+  <Step title="Restart analyzer">
+    Run `flutter pub get` in your project main directory and restart the analysis server in your IDE.
+  </Step>
+</Steps>
+
+<Note>
+  For library packages (rather than applications), use `package:leancode_lint/analysis_options_package.yaml` instead to expose public API documentation requirements.
+</Note>
+
+## Configuration
+
+### Default Configuration
+
+By default, `leancode_lint` uses `LeanCodeLintConfig()` with sensible defaults. Simply enable the plugin in `analysis_options.yaml` to use it as-is.
+
+### Custom Configuration
+
+To customize rule behavior, create your own analyzer plugin package that depends on `leancode_lint`:
+
+<CodeGroup>
+```dart my_lints/lib/main.dart
+import 'package:leancode_lint/plugin.dart';
+
+final plugin = LeanCodeLintPlugin(
+  name: 'my_lints',
+  config: LeanCodeLintConfig(
+    applicationPrefix: 'Lncd',
+    catchParameterNames: CatchParameterNamesConfig(
+      exception: 'error',
+      stackTrace: 'stackTrace',
+    ),
+    designSystemItemReplacements: {
+      'AppText': [
+        DesignSystemForbiddenItem(name: 'Text', packageName: 'flutter'),
+        DesignSystemForbiddenItem(name: 'RichText', packageName: 'flutter'),
+      ],
+      'AppScaffold': [
+        DesignSystemForbiddenItem(name: 'Scaffold', packageName: 'flutter'),
+      ],
+    },
+  ),
+);
+```
+
+```yaml analysis_options.yaml
+include: package:leancode_lint/analysis_options.yaml
+
+plugins:
+  my_lints:
+    path: ./path/to/my_lints
+```
+</CodeGroup>
+
+## Custom Lint Rules
+
+`leancode_lint` includes 16 custom lint rules to enforce best practices:
+
+<Accordion title="add_cubit_suffix_for_your_cubits">
+  **DO** add a 'Cubit' suffix to your cubit names.
+
+  **Bad:**
+  ```dart
+  class MyClass extends Cubit<int> {}
+  ```
+
+  **Good:**
+  ```dart
+  class MyClassCubit extends Cubit<int> {}
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="avoid_conditional_hooks">
+  **AVOID** using hooks conditionally. Hooks must be called in the same order on every build.
+
+  **Bad:**
+  ```dart
+  Widget build(BuildContext context) {
+    if (condition) {
+      useEffect(() {
+        // ...
+      }, []);
+    }
+  }
+  ```
+
+  **Good:**
+  ```dart
+  Widget build(BuildContext context) {
+    useEffect(() {
+      if (condition) {
+        // ...
+      }
+    }, []);
+  }
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="bloc_related_class_naming">
+  **DO** follow the naming convention for Bloc/Cubit related classes.
+
+  For `ExampleBloc`:
+  - Event class: `ExampleEvent`
+  - State class: `ExampleState`
+  - Presentation Event class: `ExamplePresentationEvent`
+
+  For `ExampleCubit`:
+  - State class: `ExampleState`
+  - Presentation Event class: `ExamplePresentationEvent`
+
+  **Configuration:**
+  ```dart
+  LeanCodeLintConfig(
+    blocRelatedClassNaming: BlocRelatedClassNamingConfig(
+      stateSuffix: 'State',
+      eventSuffix: 'Event',
+      presentationEventSuffix: 'PresentationEvent',
+    ),
+  )
+  ```
+</Accordion>
+
+<Accordion title="catch_parameter_names">
+  **DO** name catch clause parameters consistently.
+
+  - For catch-all: exception should be named `err` and stacktrace `st`
+  - For typed catch: stacktrace must be named `st`
+
+  **Bad:**
+  ```dart
+  void f() {
+    try {} catch (e, s) {}
+  }
+  ```
+
+  **Good:**
+  ```dart
+  void f() {
+    try {} catch (err, st) {}
+    try {} on SocketException catch (e, st) {}
+  }
+  ```
+
+  **Configuration:**
+  ```dart
+  LeanCodeLintConfig(
+    catchParameterNames: CatchParameterNamesConfig(
+      exception: 'error',
+      stackTrace: 'stackTrace',
+    ),
+  )
+  ```
+</Accordion>
+
+<Accordion title="hook_widget_does_not_use_hooks">
+  **AVOID** extending `HookWidget` if no hooks are used.
+
+  **Bad:**
+  ```dart
+  class MyWidget extends HookWidget {
+    @override
+    Widget build(BuildContext context) {
+      return Placeholder();
+    }
+  }
+  ```
+
+  **Good:**
+  ```dart
+  class MyWidget extends StatelessWidget {
+    @override
+    Widget build(BuildContext context) {
+      return Placeholder();
+    }
+  }
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="prefix_widgets_returning_slivers">
+  **DO** prefix widget names with 'Sliver' if the widget returns slivers.
+
+  **Bad:**
+  ```dart
+  class MyWidget extends StatelessWidget {
+    @override
+    Widget build(BuildContext context) {
+      return SliverToBoxAdapter();
+    }
+  }
+  ```
+
+  **Good:**
+  ```dart
+  class SliverMyWidget extends StatelessWidget {
+    @override
+    Widget build(BuildContext context) {
+      return SliverToBoxAdapter();
+    }
+  }
+  ```
+
+  **Configuration:**
+  ```dart
+  LeanCodeLintConfig(applicationPrefix: 'Lncd')
+  ```
+  This allows `LncdSliverMyWidget` as a valid name.
+</Accordion>
+
+<Accordion title="start_comments_with_space">
+  **DO** start comments/docs with an empty space.
+
+  **Bad:**
+  ```dart
+  //some comment
+  ///some doc
+  ```
+
+  **Good:**
+  ```dart
+  // some comment
+  /// some doc
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="use_design_system_item">
+  **AVOID** using items disallowed by the design system.
+
+  This rule highlights forbidden usages and suggests alternatives preferred by the design system.
+
+  **Configuration:**
+  ```dart
+  LeanCodeLintConfig(
+    designSystemItemReplacements: {
+      'LncdText': [
+        DesignSystemForbiddenItem(name: 'Text', packageName: 'flutter'),
+        DesignSystemForbiddenItem(name: 'RichText', packageName: 'flutter'),
+      ],
+      'LncdScaffold': [
+        DesignSystemForbiddenItem(name: 'Scaffold', packageName: 'flutter'),
+      ],
+    },
+  )
+  ```
+</Accordion>
+
+<Accordion title="avoid_single_child_in_multi_child_widgets">
+  **AVOID** using `Column`, `Row`, `Flex`, `Wrap`, `SliverList`, `MultiSliver`, etc. with a single child.
+
+  **Bad:**
+  ```dart
+  Widget build(BuildContext context) {
+    return Column(
+      children: [Container()],
+    );
+  }
+  ```
+
+  **Good:**
+  ```dart
+  Widget build(BuildContext context) {
+    return Container();
+  }
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="use_dedicated_media_query_methods">
+  **AVOID** using `MediaQuery.of` or `MediaQuery.maybeOf` to access only one property.
+
+  Dedicated methods offer better performance by minimizing unnecessary widget rebuilds.
+
+  **Bad:**
+  ```dart
+  final size = MediaQuery.of(context).size;
+  ```
+
+  **Good:**
+  ```dart
+  final size = MediaQuery.sizeOf(context);
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="use_align">
+  **DO** use the Align widget instead of the Container widget with only the alignment parameter.
+
+  **Bad:**
+  ```dart
+  return Container(
+    alignment: Alignment.bottomCenter,
+    child: const SizedBox(),
+  );
+  ```
+
+  **Good:**
+  ```dart
+  return const Align(
+    alignment: Alignment.bottomCenter,
+    child: SizedBox(),
+  );
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="use_padding">
+  **DO** use Padding widget instead of the Container widget with only the margin parameter.
+
+  **Bad:**
+  ```dart
+  return Container(
+    margin: EdgeInsets.all(10),
+    child: const SizedBox(),
+  );
+  ```
+
+  **Good:**
+  ```dart
+  return const Padding(
+    padding: EdgeInsets.all(10),
+    child: SizedBox(),
+  );
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="prefer_center_over_align">
+  **DO** use the Center widget instead of the Align widget with alignment set to Alignment.center.
+
+  **Bad:**
+  ```dart
+  return const Align(
+    child: SizedBox(),
+  );
+  ```
+
+  **Good:**
+  ```dart
+  return const Center(
+    child: SizedBox(),
+  );
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+<Accordion title="prefer_equatable_mixin">
+  **DO** mix in `EquatableMixin` instead of extending `Equatable`.
+
+  **Bad:**
+  ```dart
+  class Foobar extends Equatable {
+    const Foobar(this.value);
+
+    final int value;
+
+    @override
+    List<Object?> get props => [value];
+  }
+  ```
+
+  **Good:**
+  ```dart
+  class Foobar with EquatableMixin {
+    const Foobar(this.value);
+
+    final int value;
+
+    @override
+    List<Object?> get props => [value];
+  }
+  ```
+
+  **Configuration:** None.
+</Accordion>
+
+## Assists
+
+Assists are IDE refactorings that can be triggered by placing your cursor over relevant code and opening the code actions dialog (e.g., `Ctrl+.` or `⌘+.` in VS Code).
+
+<Accordion title="Convert positional to named formal">
+  Converts required positional parameters to named ones.
+
+  **Before:**
+  ```dart
+  class MyType {
+    const MyType(
+      this.pos0,
+      this.hello, {
+      this.named1,
+    });
+
+    final String pos0;
+    final OtherType hello;
+    final int? named1;
+  }
+  ```
+
+  **After applying to `pos0`:**
+  ```dart
+  class MyType {
+    const MyType(
+      this.hello, {
+      required this.pos0,
+      this.named1,
+    });
+
+    final String pos0;
+    final OtherType hello;
+    final int? named1;
+  }
+  ```
+</Accordion>
+
+<Accordion title="Convert record into nominal type">
+  Converts Dart records into named classes for better type safety and maintainability.
+</Accordion>
+
+<Accordion title="Convert iterable map to collection-for">
+  Converts `iterable.map(...).toList()` patterns into more readable collection-for syntax.
+</Accordion>
+
+## Disabling Rules
+
+To disable a particular custom lint rule, set it to `false` in `analysis_options.yaml`:
+
+```yaml
+plugins:
+  leancode_lint:
+    version: ^21.0.0
+    diagnostics:
+      prefix_widgets_returning_slivers: false
+```
+
+## Additional Features
+
+<Card title="Comprehensive Linter Configuration" icon="sliders">
+  The package includes `analysis_options.yaml` with 200+ carefully selected and configured lint rules covering:
+  - Strict type checking (strict-casts, strict-inference, strict-raw-types)
+  - Flutter best practices
+  - Performance optimizations
+  - Code style consistency
+</Card>
+
+<Card title="Library Package Support" icon="book">
+  Use `analysis_options_package.yaml` for library projects to enable public API documentation requirements and other library-specific rules.
+</Card>
+
+## Package Information
+
+- **Latest Version:** 21.0.0+1
+- **Minimum Dart SDK:** 3.11.0
+- **Repository:** [GitHub](https://github.com/leancodepl/flutter_corelibrary)
+- **Pub.dev:** [leancode_lint](https://pub.dev/packages/leancode_lint)
+
+<Warning>
+  This package requires Dart SDK >=3.11.0. Make sure your project meets this requirement before installation.
+</Warning>

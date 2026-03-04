@@ -1,0 +1,861 @@
+---
+title: Analytics Integration
+description: A comprehensive guide to integrating analytics in your Flutter app with support for multiple backends including Firebase and PostHog
+---
+
+The LeanCode analytics packages provide a unified interface for tracking analytics events across multiple providers. This guide covers setting up analytics with Firebase, PostHog, or custom implementations.
+
+## Overview
+
+The analytics system is split into three packages:
+
+- **`leancode_analytics_base`** - Core abstractions and interfaces
+- **`leancode_analytics_firebase`** - Firebase Analytics implementation
+- **`leancode_analytics_posthog`** - PostHog Analytics implementation
+
+This modular approach allows you to:
+- Use multiple analytics providers simultaneously
+- Switch providers without changing your app code
+- Create custom analytics implementations
+
+## Installation
+
+<Steps>
+  <Step title="Add the base package">
+    All implementations require the base package:
+
+    ```bash
+    flutter pub add leancode_analytics_base
+    ```
+  </Step>
+
+  <Step title="Add your analytics provider">
+    Choose one or more analytics providers:
+
+    <Tabs>
+      <Tab title="Firebase">
+        ```bash
+        flutter pub add leancode_analytics_firebase
+        ```
+      </Tab>
+
+      <Tab title="PostHog">
+        ```bash
+        flutter pub add leancode_analytics_posthog
+        ```
+      </Tab>
+
+      <Tab title="Both">
+        ```bash
+        flutter pub add leancode_analytics_firebase leancode_analytics_posthog
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Firebase Analytics Setup
+
+### Configure Firebase
+
+<Steps>
+  <Step title="Set up Firebase project">
+    Follow the [Firebase setup guide](https://firebase.google.com/docs/flutter/setup) to add Firebase to your Flutter app.
+  </Step>
+
+  <Step title="Initialize Firebase and analytics">
+    ```dart
+    import 'package:firebase_core/firebase_core.dart';
+    import 'package:leancode_analytics_firebase/leancode_analytics_firebase.dart';
+    import 'firebase_options.dart';
+
+    void main() async {
+      WidgetsFlutterBinding.ensureInitialized();
+      
+      // Initialize Firebase (Firebase class is reexported from the package)
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      
+      // Create analytics instance
+      final analytics = FirebaseLeanAnalytics();
+      
+      runApp(MyApp(analytics: analytics));
+    }
+    ```
+  </Step>
+
+  <Step title="Add navigation observers">
+    Add analytics observers to your app's navigation for automatic screen tracking:
+
+    ```dart
+    class MyApp extends StatelessWidget {
+      const MyApp({required this.analytics, super.key});
+      
+      final FirebaseLeanAnalytics analytics;
+
+      @override
+      Widget build(BuildContext context) {
+        return MaterialApp(
+          title: 'My App',
+          navigatorObservers: analytics.navigatorObservers,
+          home: const HomePage(),
+        );
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+### Track Events
+
+```dart
+import 'package:leancode_analytics_base/leancode_analytics_base.dart';
+
+// Track a button tap
+analytics.register(
+  TapAnalyticsEvent(
+    key: 'submit_button',
+    label: 'Submit Form',
+  ),
+);
+
+// Track user login
+analytics.register(
+  LoginAnalyticsEvent(userId: 'user_123'),
+);
+
+// Track custom events
+analytics.register(
+  AnalyticsEvent(
+    name: 'purchase_completed',
+    params: {
+      'item_id': 'prod_123',
+      'price': 29.99,
+      'currency': 'USD',
+    },
+  ),
+);
+```
+
+## PostHog Analytics Setup
+
+### Configure PostHog
+
+<Steps>
+  <Step title="Get PostHog credentials">
+    Sign up at [PostHog](https://posthog.com/) and get your API key and host URL.
+  </Step>
+
+  <Step title="Initialize PostHog and analytics">
+    ```dart
+    import 'package:leancode_analytics_posthog/leancode_analytics_posthog.dart';
+
+    void main() async {
+      WidgetsFlutterBinding.ensureInitialized();
+      
+      // Initialize PostHog (Posthog class is reexported from the package)
+      await Posthog().setup(
+        apiKey: 'phc_your_api_key',
+        host: 'https://app.posthog.com', // or your self-hosted instance
+        captureApplicationLifecycleEvents: true,
+      );
+      
+      // Create analytics instance
+      final analytics = PostHogLeanAnalytics();
+      
+      runApp(MyApp(analytics: analytics));
+    }
+    ```
+  </Step>
+
+  <Step title="Add navigation observers">
+    ```dart
+    class MyApp extends StatelessWidget {
+      const MyApp({required this.analytics, super.key});
+      
+      final PostHogLeanAnalytics analytics;
+
+      @override
+      Widget build(BuildContext context) {
+        return MaterialApp(
+          title: 'My App',
+          navigatorObservers: analytics.navigatorObservers,
+          home: const HomePage(),
+        );
+      }
+    }
+    ```
+
+    <Note>
+      PostHog uses `PosthogObserver` from the `posthog_flutter` package for automatic screen tracking.
+    </Note>
+  </Step>
+</Steps>
+
+### Track Events
+
+PostHog uses the same event API as Firebase:
+
+```dart
+// Track user interactions
+analytics.register(
+  TapAnalyticsEvent(
+    key: 'checkout_button',
+    label: 'Proceed to Checkout',
+  ),
+);
+
+// Track user login
+analytics.register(
+  LoginAnalyticsEvent(userId: 'user_456'),
+);
+
+// Custom events with properties
+analytics.register(
+  AnalyticsEvent(
+    name: 'feature_used',
+    params: {
+      'feature_name': 'dark_mode',
+      'enabled': true,
+    },
+  ),
+);
+```
+
+## Using Multiple Analytics Providers
+
+You can send events to multiple analytics providers simultaneously:
+
+```dart
+import 'package:leancode_analytics_base/leancode_analytics_base.dart';
+import 'package:leancode_analytics_firebase/leancode_analytics_firebase.dart';
+import 'package:leancode_analytics_posthog/leancode_analytics_posthog.dart';
+
+class MultiAnalytics implements LeanAnalytics {
+  MultiAnalytics({
+    required this.firebase,
+    required this.postHog,
+  });
+
+  final FirebaseLeanAnalytics firebase;
+  final PostHogLeanAnalytics postHog;
+
+  @override
+  void register(AnalyticsEvent event) {
+    firebase.register(event);
+    postHog.register(event);
+  }
+
+  @override
+  List<NavigatorObserver> get navigatorObservers => [
+    ...firebase.navigatorObservers,
+    ...postHog.navigatorObservers,
+  ];
+}
+
+// Usage
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize both providers
+  await Firebase.initializeApp(options: firebaseOptions);
+  await Posthog().setup(apiKey: 'your_key', host: 'https://app.posthog.com');
+  
+  final analytics = MultiAnalytics(
+    firebase: FirebaseLeanAnalytics(),
+    postHog: PostHogLeanAnalytics(),
+  );
+  
+  runApp(MyApp(analytics: analytics));
+}
+```
+
+<Tip>
+  Events are now tracked in both Firebase and PostHog automatically!
+</Tip>
+
+## Event Types
+
+### Built-in Events
+
+The base package provides common event types:
+
+<Tabs>
+  <Tab title="TapAnalyticsEvent">
+    Track user taps and button clicks:
+
+    ```dart
+    analytics.register(
+      TapAnalyticsEvent(
+        key: 'add_to_cart_button',
+        label: 'Add to Cart', // Optional
+      ),
+    );
+    ```
+
+    Parameters automatically added:
+    - `key`: Unique identifier for the tapped element
+    - `label`: Optional descriptive label
+  </Tab>
+
+  <Tab title="LoginAnalyticsEvent">
+    Track user authentication:
+
+    ```dart
+    analytics.register(
+      LoginAnalyticsEvent(
+        userId: 'user_789',
+      ),
+    );
+    ```
+
+    Parameters automatically added:
+    - `user_id`: The authenticated user's ID
+  </Tab>
+
+  <Tab title="Custom AnalyticsEvent">
+    Create custom events with any parameters:
+
+    ```dart
+    analytics.register(
+      AnalyticsEvent(
+        name: 'video_watched',
+        params: {
+          'video_id': 'vid_123',
+          'duration_seconds': 120,
+          'completed': true,
+        },
+      ),
+    );
+    ```
+  </Tab>
+</Tabs>
+
+### Custom Event Classes
+
+Create reusable custom event classes:
+
+```dart
+class PurchaseEvent extends AnalyticsEvent {
+  PurchaseEvent({
+    required String itemId,
+    required double price,
+    required String currency,
+  }) : super(
+    name: 'purchase',
+    params: {
+      'item_id': itemId,
+      'price': price,
+      'currency': currency,
+      'timestamp': DateTime.now().toIso8601String(),
+    },
+  );
+}
+
+class ScreenViewEvent extends AnalyticsEvent {
+  ScreenViewEvent(String screenName) : super(
+    name: 'screen_view',
+    params: {'screen_name': screenName},
+  );
+}
+
+// Usage
+analytics.register(
+  PurchaseEvent(
+    itemId: 'prod_456',
+    price: 49.99,
+    currency: 'USD',
+  ),
+);
+
+analytics.register(
+  ScreenViewEvent('product_details'),
+);
+```
+
+## Automatic Screen Tracking
+
+### With MaterialApp
+
+```dart
+MaterialApp(
+  navigatorObservers: analytics.navigatorObservers,
+  routes: {
+    '/': (context) => const HomePage(),
+    '/profile': (context) => const ProfilePage(),
+    '/settings': (context) => const SettingsPage(),
+  },
+)
+```
+
+### With GoRouter
+
+```dart
+import 'package:go_router/go_router.dart';
+
+final router = GoRouter(
+  observers: analytics.navigatorObservers,
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const HomePage(),
+    ),
+    GoRoute(
+      path: '/profile',
+      builder: (context, state) => const ProfilePage(),
+    ),
+  ],
+);
+
+MaterialApp.router(
+  routerConfig: router,
+)
+```
+
+### Custom Route Tracking
+
+Implement `LeanAnalyticsRoute` for custom screen names:
+
+```dart
+import 'package:leancode_analytics_base/leancode_analytics_base.dart';
+
+class CustomRoute<T> extends MaterialPageRoute<T> implements LeanAnalyticsRoute {
+  CustomRoute({
+    required super.builder,
+    required this.screenName,
+    super.settings,
+  });
+
+  final String screenName;
+
+  @override
+  String get analyticsScreenName => screenName;
+}
+
+// Usage
+Navigator.of(context).push(
+  CustomRoute(
+    builder: (context) => const ProductDetailsPage(),
+    screenName: 'product_details_premium',
+  ),
+);
+```
+
+## Common Use Cases
+
+### Track User Interactions
+
+```dart
+class ProductCard extends StatelessWidget {
+  const ProductCard({required this.product, super.key});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    final analytics = context.read<LeanAnalytics>();
+
+    return GestureDetector(
+      onTap: () {
+        // Track the tap
+        analytics.register(
+          TapAnalyticsEvent(
+            key: 'product_card_${product.id}',
+            label: product.name,
+          ),
+        );
+        
+        // Navigate to details
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailsPage(product),
+          ),
+        );
+      },
+      child: Card(
+        child: Column(
+          children: [
+            Image.network(product.imageUrl),
+            Text(product.name),
+            Text('\$${product.price}'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+### Track Form Submissions
+
+```dart
+Future<void> submitForm() async {
+  final analytics = context.read<LeanAnalytics>();
+  
+  // Track form submission start
+  analytics.register(
+    AnalyticsEvent(
+      name: 'form_submit_started',
+      params: {'form_type': 'contact'},
+    ),
+  );
+  
+  try {
+    await apiService.submitContact(formData);
+    
+    // Track success
+    analytics.register(
+      AnalyticsEvent(
+        name: 'form_submit_success',
+        params: {'form_type': 'contact'},
+      ),
+    );
+  } catch (e) {
+    // Track error
+    analytics.register(
+      AnalyticsEvent(
+        name: 'form_submit_error',
+        params: {
+          'form_type': 'contact',
+          'error': e.toString(),
+        },
+      ),
+    );
+  }
+}
+```
+
+### Track Feature Usage
+
+```dart
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final analytics = context.read<LeanAnalytics>();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: ListView(
+        children: [
+          SwitchListTile(
+            title: const Text('Dark Mode'),
+            value: isDarkMode,
+            onChanged: (value) {
+              // Track feature toggle
+              analytics.register(
+                AnalyticsEvent(
+                  name: 'feature_toggled',
+                  params: {
+                    'feature': 'dark_mode',
+                    'enabled': value,
+                  },
+                ),
+              );
+              
+              setState(() => isDarkMode = value);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+### Track Search Queries
+
+```dart
+class SearchBar extends StatefulWidget {
+  const SearchBar({super.key});
+
+  @override
+  State<SearchBar> createState() => _SearchBarState();
+}
+
+class _SearchBarState extends State<SearchBar> {
+  final _controller = TextEditingController();
+
+  void _onSearch() {
+    final query = _controller.text;
+    final analytics = context.read<LeanAnalytics>();
+    
+    analytics.register(
+      AnalyticsEvent(
+        name: 'search',
+        params: {
+          'search_term': query,
+          'query_length': query.length,
+        },
+      ),
+    );
+    
+    // Perform search
+    searchService.search(query);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      onSubmitted: (_) => _onSearch(),
+      decoration: InputDecoration(
+        hintText: 'Search...',
+        suffixIcon: IconButton(
+          icon: const Icon(Icons.search),
+          onPressed: _onSearch,
+        ),
+      ),
+    );
+  }
+}
+```
+
+## Dependency Injection
+
+### With Provider
+
+```dart
+import 'package:provider/provider.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  await Firebase.initializeApp(options: firebaseOptions);
+  final analytics = FirebaseLeanAnalytics();
+  
+  runApp(
+    Provider<LeanAnalytics>.value(
+      value: analytics,
+      child: MyApp(analytics: analytics),
+    ),
+  );
+}
+
+// Usage in widgets
+class MyWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final analytics = context.read<LeanAnalytics>();
+    
+    return ElevatedButton(
+      onPressed: () {
+        analytics.register(
+          TapAnalyticsEvent(key: 'my_button', label: 'Click'),
+        );
+      },
+      child: const Text('Track Me'),
+    );
+  }
+}
+```
+
+### With GetIt
+
+```dart
+import 'package:get_it/get_it.dart';
+
+final getIt = GetIt.instance;
+
+void setupDependencies() async {
+  await Firebase.initializeApp(options: firebaseOptions);
+  
+  getIt.registerSingleton<LeanAnalytics>(
+    FirebaseLeanAnalytics(),
+  );
+}
+
+// Usage
+final analytics = getIt<LeanAnalytics>();
+analytics.register(TapAnalyticsEvent(key: 'button', label: 'Tap'));
+```
+
+## Custom Analytics Implementation
+
+Create your own analytics backend:
+
+```dart
+import 'package:flutter/widgets.dart';
+import 'package:leancode_analytics_base/leancode_analytics_base.dart';
+
+class CustomAnalytics implements LeanAnalytics {
+  final ApiClient apiClient;
+  
+  CustomAnalytics(this.apiClient);
+
+  @override
+  void register(AnalyticsEvent event) {
+    // Send to your custom backend
+    apiClient.post('/analytics/events', {
+      'name': event.name,
+      'params': event.params,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+
+  @override
+  List<NavigatorObserver> get navigatorObservers => [
+    CustomNavigatorObserver(this),
+  ];
+}
+
+class CustomNavigatorObserver extends NavigatorObserver {
+  final CustomAnalytics analytics;
+  
+  CustomNavigatorObserver(this.analytics);
+
+  @override
+  void didPush(Route route, Route? previousRoute) {
+    super.didPush(route, previousRoute);
+    
+    if (route is LeanAnalyticsRoute) {
+      analytics.register(
+        AnalyticsEvent(
+          name: 'screen_view',
+          params: {'screen_name': route.analyticsScreenName},
+        ),
+      );
+    }
+  }
+}
+```
+
+## Best Practices
+
+<Accordion title="Use consistent event naming">
+  Follow a naming convention for your events:
+
+  ```dart
+  // Good: snake_case, descriptive
+  'button_clicked'
+  'purchase_completed'
+  'video_started'
+  
+  // Avoid: inconsistent casing, vague names
+  'ButtonClick'
+  'event1'
+  'test'
+  ```
+</Accordion>
+
+<Accordion title="Don't track sensitive information">
+  Never include personally identifiable information (PII) in event parameters:
+
+  ```dart
+  // Bad: Contains PII
+  analytics.register(
+    AnalyticsEvent(
+      name: 'form_submitted',
+      params: {
+        'email': 'user@example.com', // Don't do this!
+        'password': 'secret123',      // Never do this!
+      },
+    ),
+  );
+  
+  // Good: Uses anonymized identifiers
+  analytics.register(
+    AnalyticsEvent(
+      name: 'form_submitted',
+      params: {
+        'user_id': 'user_123',
+        'form_type': 'contact',
+      },
+    ),
+  );
+  ```
+</Accordion>
+
+<Accordion title="Track key user journeys">
+  Focus on events that help understand user behavior:
+
+  ```dart
+  // Onboarding funnel
+  'onboarding_started'
+  'onboarding_step_completed'
+  'onboarding_finished'
+  
+  // Purchase funnel
+  'product_viewed'
+  'add_to_cart'
+  'checkout_started'
+  'purchase_completed'
+  ```
+</Accordion>
+
+<Accordion title="Use dependency injection">
+  Make analytics injectable for easier testing:
+
+  ```dart
+  class MyService {
+    final LeanAnalytics analytics;
+    
+    MyService({required this.analytics});
+    
+    void performAction() {
+      // Service logic
+      analytics.register(
+        AnalyticsEvent(name: 'action_performed', params: {}),
+      );
+    }
+  }
+  
+  // Easy to mock in tests
+  final mockAnalytics = MockLeanAnalytics();
+  final service = MyService(analytics: mockAnalytics);
+  ```
+</Accordion>
+
+## Migration from Deprecated Package
+
+If you're using the deprecated `leancode_analytics` package, here's how to migrate:
+
+<Steps>
+  <Step title="Update dependencies">
+    Replace the old package with the new ones:
+
+    ```yaml
+    # Remove
+    # leancode_analytics: ^x.x.x
+    
+    # Add
+    dependencies:
+      leancode_analytics_base: ^1.0.0
+      leancode_analytics_firebase: ^1.0.0  # if using Firebase
+    ```
+  </Step>
+
+  <Step title="Update imports">
+    ```dart
+    // Old
+    import 'package:leancode_analytics/leancode_analytics.dart';
+    
+    // New
+    import 'package:leancode_analytics_base/leancode_analytics_base.dart';
+    import 'package:leancode_analytics_firebase/leancode_analytics_firebase.dart';
+    ```
+  </Step>
+
+  <Step title="Update initialization">
+    ```dart
+    // Old
+    final analytics = FirebaseLeanAnalytics();
+    
+    // New (same!)
+    final analytics = FirebaseLeanAnalytics();
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  The API remains largely the same, so most code should work without changes!
+</Note>
+
+## Next Steps
+
+- Set up [authentication](/guides/authentication-setup) to track user-specific events
+- Use [CQRS](/guides/getting-started-with-cqrs) to track backend interactions
+- Configure [custom lint rules](/guides/custom-lint-configuration) for code quality

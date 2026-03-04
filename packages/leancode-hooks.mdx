@@ -1,0 +1,401 @@
+---
+title: LeanCode Hooks
+description: A collection of custom Flutter hooks for common patterns and state management, including BLoC integration, debouncing, and text editing utilities.
+---
+
+# LeanCode Hooks
+
+A curated collection of Flutter hooks that we commonly use at LeanCode, all gathered in one place for better discoverability and consistent versioning.
+
+## Installation
+
+Add the package to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  leancode_hooks: ^0.1.2
+```
+
+<Note>
+This package exports `package:flutter_hooks`, so you don't need to add it as a separate dependency.
+</Note>
+
+## Import
+
+```dart
+import 'package:leancode_hooks/leancode_hooks.dart';
+```
+
+## Available Hooks
+
+### BLoC Integration
+
+#### useBloc
+
+Provides a `Cubit` or `Bloc` that is automatically disposed without having to use `BlocProvider`.
+
+**Signature:**
+```dart
+B useBloc<B extends BlocBase<Object?>>(
+  B Function() create, {
+  List<Object?> keys = const [],
+})
+```
+
+**Example:**
+```dart
+class MyWidget extends HookWidget {
+  @override
+  Widget build(BuildContext context) {
+    final counterCubit = useBloc(() => CounterCubit());
+    final count = useBlocState(counterCubit);
+    
+    return Column(
+      children: [
+        Text('Count: $count'),
+        ElevatedButton(
+          onPressed: () => counterCubit.increment(),
+          child: Text('Increment'),
+        ),
+      ],
+    );
+  }
+}
+```
+
+#### useBlocState
+
+Provides the current state of a `Cubit` or `Bloc` and forces the widget to rebuild on state changes.
+
+**Signature:**
+```dart
+S useBlocState<S>(BlocBase<S> bloc)
+```
+
+**Example:**
+```dart
+final authBloc = context.read<AuthBloc>();
+final authState = useBlocState(authBloc);
+
+if (authState is Authenticated) {
+  return HomeScreen();
+}
+return LoginScreen();
+```
+
+#### useBlocListener
+
+Takes a `Bloc` or `Cubit` and invokes a listener in response to state changes.
+
+**Signature:**
+```dart
+void useBlocListener<S>({
+  required BlocBase<S> bloc,
+  required void Function(S state) listener,
+})
+```
+
+**Example:**
+```dart
+final authBloc = context.read<AuthBloc>();
+
+useBlocListener<AuthState>(
+  bloc: authBloc,
+  listener: (state) {
+    if (state is AuthError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(state.message)),
+      );
+    }
+  },
+);
+```
+
+### Debouncing & Throttling
+
+#### useDebounce
+
+Returns a function whose invocation will be delayed by the specified duration. When called again, the previous invocation is canceled.
+
+**Signature:**
+```dart
+DebouncedCallback useDebounce(Duration duration)
+```
+
+**Example:**
+```dart
+final debounce = useDebounce(Duration(milliseconds: 500));
+final searchController = useTextEditingController();
+
+useEffect(() {
+  void listener() {
+    debounce(() {
+      // This will only run 500ms after the user stops typing
+      performSearch(searchController.text);
+    });
+  }
+  
+  searchController.addListener(listener);
+  return () => searchController.removeListener(listener);
+}, [searchController]);
+```
+
+#### useThrottle
+
+Returns a function that is throttled for the specified duration after being called.
+
+**Signature:**
+```dart
+ThrottledCallback useThrottle(Duration duration)
+```
+
+**Example:**
+```dart
+final throttle = useThrottle(Duration(seconds: 1));
+
+return ElevatedButton(
+  onPressed: () {
+    throttle(() {
+      // This will run at most once per second
+      submitForm();
+    });
+  },
+  child: Text('Submit'),
+);
+```
+
+### Text Editing
+
+#### useDeclarativeTextEditingController
+
+A wrapper around `useTextEditingController` that updates the controller's text when the value changes declaratively.
+
+**Signature:**
+```dart
+TextEditingController useDeclarativeTextEditingController({
+  required String text,
+})
+```
+
+**Example:**
+```dart
+final searchQuery = useState('');
+final controller = useDeclarativeTextEditingController(
+  text: searchQuery.value,
+);
+
+return Column(
+  children: [
+    TextField(controller: controller),
+    ElevatedButton(
+      onPressed: () => searchQuery.value = 'Flutter',
+      child: Text('Set to "Flutter"'),
+    ),
+  ],
+);
+```
+
+<Tip>
+This hook handles updating the controller's text when the `text` parameter changes, which is useful for controlled text inputs.
+</Tip>
+
+#### useSyncedTextEditingController
+
+A wrapper around `useTextEditingController` that makes it easier to add an `onChanged` callback.
+
+**Signature:**
+```dart
+TextEditingController useSyncedTextEditingController(
+  void Function(TextEditingValue value) onChanged, {
+  String? initialText,
+})
+```
+
+**Example:**
+```dart
+final searchQuery = useState('');
+final controller = useSyncedTextEditingController(
+  (value) => searchQuery.value = value.text,
+  initialText: '',
+);
+
+return TextField(
+  controller: controller,
+  decoration: InputDecoration(
+    labelText: 'Search',
+    suffixText: 'Query: ${searchQuery.value}',
+  ),
+);
+```
+
+### Utilities
+
+#### useDisposable
+
+Creates and memoizes an instance, then executes a dispose function on unmount to cleanup resources.
+
+**Signature:**
+```dart
+T useDisposable<T>({
+  required ValueGetter<T> builder,
+  required void Function(T) dispose,
+  List<Object?> keys = const [],
+})
+```
+
+**Example:**
+```dart
+final videoController = useDisposable(
+  builder: () => VideoPlayerController.network('https://example.com/video.mp4'),
+  dispose: (controller) => controller.dispose(),
+);
+
+return VideoPlayer(videoController);
+```
+
+#### useFocused
+
+Subscribes to `FocusNode` changes and returns whether the node has focus.
+
+**Signature:**
+```dart
+bool useFocused(FocusNode focusNode)
+```
+
+**Example:**
+```dart
+final focusNode = useFocusNode();
+final isFocused = useFocused(focusNode);
+
+return TextField(
+  focusNode: focusNode,
+  decoration: InputDecoration(
+    labelText: 'Email',
+    border: OutlineInputBorder(
+      borderSide: BorderSide(
+        color: isFocused ? Colors.blue : Colors.grey,
+        width: isFocused ? 2 : 1,
+      ),
+    ),
+  ),
+);
+```
+
+#### usePostFrameEffect
+
+Registers an effect to be run in `WidgetsBinding.addPostFrameCallback`.
+
+**Signature:**
+```dart
+void usePostFrameEffect(
+  VoidCallback effect, {
+  List<Object?> keys = const [],
+})
+```
+
+**Example:**
+```dart
+final scrollController = useScrollController();
+
+usePostFrameEffect(
+  () {
+    // Scroll to bottom after the frame is rendered
+    scrollController.jumpTo(
+      scrollController.position.maxScrollExtent,
+    );
+  },
+  [messages.length], // Re-run when messages change
+);
+```
+
+#### useStreamListener
+
+Listens to a stream and calls `onData` on new data.
+
+**Signature:**
+```dart
+void useStreamListener<T>(
+  Stream<T> stream,
+  ValueChanged<T> onData, {
+  Function? onError,
+  VoidCallback? onDone,
+  bool? cancelOnError,
+  List<Object?> keys = const [],
+})
+```
+
+**Example:**
+```dart
+final locationStream = locationService.getLocationStream();
+
+useStreamListener<Location>(
+  locationStream,
+  (location) {
+    print('New location: ${location.latitude}, ${location.longitude}');
+  },
+  onError: (error) => print('Location error: $error'),
+);
+```
+
+#### useTapGestureRecognizer
+
+Creates a `TapGestureRecognizer` that will be disposed automatically.
+
+**Signature:**
+```dart
+TapGestureRecognizer useTapGestureRecognizer(
+  TapGestureRecognizer Function() builder, {
+  List<Object?> keys = const [],
+})
+```
+
+**Example:**
+```dart
+final tapRecognizer = useTapGestureRecognizer(
+  () => TapGestureRecognizer()
+    ..onTap = () => print('Tapped!'),
+);
+
+return Text.rich(
+  TextSpan(
+    text: 'Click ',
+    children: [
+      TextSpan(
+        text: 'here',
+        style: TextStyle(color: Colors.blue),
+        recognizer: tapRecognizer,
+      ),
+      TextSpan(text: ' to continue'),
+    ],
+  ),
+);
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use hooks only in HookWidget">
+    All hooks must be called inside a `HookWidget` or `HookConsumer` (from flutter_hooks).
+  </Step>
+  
+  <Step title="Maintain hook call order">
+    Always call hooks in the same order on every build. Don't call hooks conditionally or in loops.
+  </Step>
+  
+  <Step title="Specify keys for dependencies">
+    When using hooks with memoization (like `useBloc`, `useDisposable`), pass the `keys` parameter to control when the value is recreated.
+  </Step>
+  
+  <Step title="Clean up resources">
+    Use `useDisposable` for resources that need cleanup, or `useEffect` with a cleanup function.
+  </Step>
+</Steps>
+
+## Related Packages
+
+- [flutter_hooks](https://pub.dev/packages/flutter_hooks) - The base hooks library
+- [flutter_bloc](https://pub.dev/packages/flutter_bloc) - For BLoC state management
+
+## Source Code
+
+View the source code on [GitHub](https://github.com/leancodepl/flutter_corelibrary/tree/master/packages/leancode_hooks).

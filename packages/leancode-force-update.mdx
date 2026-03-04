@@ -1,0 +1,416 @@
+---
+title: Force Update
+description: Implement version enforcement and update prompts in your Flutter app
+---
+
+The `leancode_force_update` package provides a quick and easy way to implement force update functionality in your Flutter app. It automatically checks for minimum required versions and can either force users to update or suggest updates based on your backend configuration.
+
+## What is Force Update?
+
+Force update allows you to:
+- **Enforce minimum app versions** - Block outdated app versions from accessing your backend
+- **Suggest updates** - Prompt users to update to newer versions without blocking access
+- **Maintain version compliance** - Keep users on supported versions with critical bug fixes and security patches
+
+This is particularly useful when you've made breaking API changes, fixed critical security vulnerabilities, or need to ensure users are on a specific version.
+
+## Installation
+
+Add the package to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  leancode_force_update: ^1.0.0-alpha+3
+```
+
+Then run:
+
+```bash
+flutter pub get
+```
+
+## How It Works
+
+The package checks your app version against backend-defined minimum versions:
+
+1. On app launch, queries the backend for version requirements
+2. Compares current app version with the response
+3. Shows either a force update screen, suggest update dialog, or nothing based on the result
+4. Automatically rechecks every 5 minutes while the app is running
+
+### Update Behavior Modes
+
+The package supports two behavior modes:
+
+<CardGroup cols={2}>
+  <Card title="Immediate Mode" icon="bolt">
+    Updates are applied immediately after the response is obtained. This is the **default behavior**.
+  </Card>
+  <Card title="Deferred Mode" icon="clock">
+    Updates are stored and applied on the next app launch. Use this to avoid interrupting the current session.
+  </Card>
+</CardGroup>
+
+<Note>
+The deferred mode is useful when users might launch your app offline and then gain connectivity later. Instead of interrupting their session, the update screen appears on next launch.
+</Note>
+
+## Basic Setup
+
+### Step 1: Create a ForceUpdateController
+
+The controller manages update dialogs and provides store navigation:
+
+```dart
+final forceUpdateController = ForceUpdateController(
+  androidBundleId: 'com.example.myapp',
+  appleAppId: '1234567890',
+);
+```
+
+### Step 2: Create Update UI Components
+
+You need to provide two custom widgets for the update experience:
+
+<Steps>
+  <Step title="Force Update Screen">
+    A full-screen widget shown when updates are **required**. Users cannot bypass this screen.
+
+    ```dart force_update_screen.dart
+    import 'package:flutter/material.dart';
+    import 'package:leancode_force_update/leancode_force_update.dart';
+
+    class ForceUpdateScreen extends StatelessWidget {
+      const ForceUpdateScreen({
+        super.key,
+        required ForceUpdateController forceUpdateController,
+      }) : _forceUpdateController = forceUpdateController;
+
+      final ForceUpdateController _forceUpdateController;
+
+      @override
+      Widget build(BuildContext context) {
+        return MaterialApp(
+          home: Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Update required',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 24),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'To continue using the app, you have to update it',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      ElevatedButton(
+                        onPressed: _forceUpdateController.openStore,
+                        child: const Text('Update'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Suggest Update Dialog">
+    A dialog shown when updates are **suggested**. Users can dismiss this dialog.
+
+    ```dart suggest_update_dialog.dart
+    import 'package:flutter/material.dart';
+    import 'package:leancode_force_update/leancode_force_update.dart';
+
+    class SuggestUpdateDialog extends StatelessWidget {
+      const SuggestUpdateDialog({
+        super.key,
+        required ForceUpdateController forceUpdateController,
+      }) : _forceUpdateController = forceUpdateController;
+
+      final ForceUpdateController _forceUpdateController;
+
+      @override
+      Widget build(BuildContext context) {
+        return ColoredBox(
+          color: Colors.black.withValues(alpha: 0.5),
+          child: Stack(
+            children: [
+              GestureDetector(
+                onTap: _forceUpdateController.hideSuggestDialog,
+                behavior: HitTestBehavior.translucent,
+              ),
+              Dialog(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Update suggested',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 20),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'A new version is available, please update the app',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _forceUpdateController.hideSuggestDialog,
+                              child: const Text('Skip'),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _forceUpdateController.openStore,
+                              child: const Text('Update'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+### Step 3: Wrap Your App with ForceUpdateGuard
+
+Wrap your `MaterialApp` with `ForceUpdateGuard`:
+
+```dart main.dart
+import 'package:cqrs/cqrs.dart';
+import 'package:flutter/material.dart';
+import 'package:leancode_force_update/leancode_force_update.dart';
+
+void main() {
+  final cqrs = Cqrs(/* your CQRS configuration */);
+  final forceUpdateController = ForceUpdateController(
+    androidBundleId: 'com.example.myapp',
+    appleAppId: '1234567890',
+  );
+
+  runApp(MyApp(
+    cqrs: cqrs,
+    forceUpdateController: forceUpdateController,
+  ));
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({
+    super.key,
+    required this.cqrs,
+    required this.forceUpdateController,
+  });
+
+  final Cqrs cqrs;
+  final ForceUpdateController forceUpdateController;
+
+  @override
+  Widget build(BuildContext context) {
+    return ForceUpdateGuard(
+      cqrs: cqrs,
+      controller: forceUpdateController,
+      suggestUpdateDialog: SuggestUpdateDialog(
+        forceUpdateController: forceUpdateController,
+      ),
+      forceUpdateScreen: ForceUpdateScreen(
+        forceUpdateController: forceUpdateController,
+      ),
+      child: MaterialApp(
+        title: 'My App',
+        home: const HomePage(),
+      ),
+    );
+  }
+}
+```
+
+## Advanced Configuration
+
+### Deferred Update Behavior
+
+Control when updates are shown using immediate flags:
+
+```dart
+ForceUpdateGuard(
+  cqrs: cqrs,
+  controller: forceUpdateController,
+  // Don't show force update screen until next app launch
+  showForceUpdateScreenImmediately: false,
+  // Don't show suggest dialog until next app launch
+  showSuggestUpdateDialogImmediately: false,
+  suggestUpdateDialog: SuggestUpdateDialog(
+    forceUpdateController: forceUpdateController,
+  ),
+  forceUpdateScreen: ForceUpdateScreen(
+    forceUpdateController: forceUpdateController,
+  ),
+  child: MaterialApp(/* ... */),
+)
+```
+
+<Note>
+Setting these flags to `false` means users won't be interrupted mid-session. Updates will only appear when they next launch the app.
+</Note>
+
+### Android In-App Updates
+
+On Android, you can use Google Play's in-app update API instead of redirecting to the Play Store:
+
+```dart
+ForceUpdateGuard(
+  cqrs: cqrs,
+  controller: forceUpdateController,
+  useAndroidSystemUI: true,
+  androidSystemUILoadingIndicator: const CircularProgressIndicator(),
+  suggestUpdateDialog: SuggestUpdateDialog(
+    forceUpdateController: forceUpdateController,
+  ),
+  forceUpdateScreen: ForceUpdateScreen(
+    forceUpdateController: forceUpdateController,
+  ),
+  child: MaterialApp(/* ... */),
+)
+```
+
+<Warning>
+When `useAndroidSystemUI` is enabled:
+- For **suggested updates**: Uses flexible in-app updates (user can continue using the app)
+- For **forced updates**: Uses immediate in-app updates (blocks app usage until update completes)
+- The `androidSystemUILoadingIndicator` is shown while checking for updates
+</Warning>
+
+## API Reference
+
+### ForceUpdateGuard
+
+The main widget that wraps your app and handles version checking.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cqrs` | `Cqrs` | Yes | CQRS instance for querying version information |
+| `controller` | `ForceUpdateController` | Yes | Controller for managing update state |
+| `suggestUpdateDialog` | `Widget` | Yes | Dialog shown for suggested updates |
+| `forceUpdateScreen` | `Widget` | Yes | Screen shown for required updates |
+| `useAndroidSystemUI` | `bool` | No | Enable Android in-app updates (default: `false`) |
+| `androidSystemUILoadingIndicator` | `Widget?` | No | Loading indicator for Android in-app updates |
+| `showForceUpdateScreenImmediately` | `bool` | No | Show force update screen immediately (default: `true`) |
+| `showSuggestUpdateDialogImmediately` | `bool` | No | Show suggest dialog immediately (default: `true`) |
+| `child` | `Widget` | Yes | Your app's root widget (usually `MaterialApp`) |
+
+### ForceUpdateController
+
+Controller for managing update dialogs and store navigation.
+
+```dart
+ForceUpdateController({
+  required String androidBundleId,
+  required String appleAppId,
+})
+```
+
+**Methods:**
+
+- `void hideSuggestDialog()` - Dismiss the suggest update dialog
+- `Future<bool> openStore()` - Open the app's store page (Play Store or App Store)
+
+### Version Support Response
+
+The backend query returns a `VersionSupportDTO` with the following structure:
+
+```dart
+class VersionSupportDTO {
+  final String currentlySupportedVersion;
+  final String minimumRequiredVersion;
+  final VersionSupportResultDTO result;
+}
+
+enum VersionSupportResultDTO {
+  updateRequired,   // Force update required
+  updateSuggested,  // Update suggested but not required
+  upToDate,         // Current version is supported
+}
+```
+
+## Backend Integration
+
+The package expects a CQRS query endpoint that implements the `VersionSupport` query contract:
+
+```dart
+VersionSupport({
+  required PlatformDTO platform,  // android or ios
+  required String version,        // Current app version
+})
+```
+
+Your backend should:
+1. Receive the platform and current version
+2. Compare against your minimum required versions
+3. Return a `VersionSupportDTO` with the appropriate result
+
+<Note>
+The version checking happens:
+- On app launch
+- Every 5 minutes while the app is running (defined in `ForceUpdateGuard.updateCheckingInterval`)
+</Note>
+
+## Storage
+
+Version check results are persisted locally using `shared_preferences`. This allows the package to:
+- Show update screens on next launch (when using deferred mode)
+- Avoid redundant network requests
+- Work offline with cached version information
+
+The storage key used is `most_recent_result`.
+
+## Platform Support
+
+- **Android**: Supports standard Play Store redirects and in-app updates via `in_app_update` package
+- **iOS**: Supports App Store redirects
+
+<Warning>
+The package only works on Android and iOS. Attempting to use it on other platforms will throw a `StateError`.
+</Warning>
+
+## Example
+
+For a complete working example, see the [example directory](https://github.com/leancodepl/flutter_corelibrary/tree/master/packages/leancode_force_update/example) in the package repository.
+
+## Best Practices
+
+1. **Design clear update screens** - Make it obvious why users need to update and what benefits they'll get
+2. **Test both update modes** - Test immediate and deferred update behavior to choose what works best for your users
+3. **Version your API carefully** - Only require force updates when absolutely necessary (breaking changes, critical security fixes)
+4. **Consider offline users** - Use deferred mode if your app supports offline functionality
+5. **Provide context** - In your update screens, explain what's new or why the update is important
+
+## Related Packages
+
+- [CQRS](/packages/leancode-cqrs) - Required for backend communication
+- [Contracts](/packages/leancode-contracts) - Type-safe API contracts
