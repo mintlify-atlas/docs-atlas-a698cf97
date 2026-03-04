@@ -1,0 +1,111 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Flutter CoreLibrary",
+  "projectDescription": "A collection of production-ready Flutter packages for building high-quality apps",
+  "theme": "palm",
+  "primaryColor": "#aaaaa7",
+  "lightColor": "#4e463d",
+  "darkColor": "#1b265f",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Packages",
+            "pages": [
+              "packages/cqrs",
+              "packages/login-client",
+              "packages/login-client-flutter"
+            ]
+          },
+          {
+            "group": "UI & Hooks",
+            "pages": [
+              "packages/leancode-hooks",
+              "packages/enhanced-gradients",
+              "packages/leancode-markup",
+              "packages/leancode-flutter-svg-adaptive-loader"
+            ]
+          },
+          {
+            "group": "Analytics & Tracking",
+            "pages": [
+              "packages/leancode-analytics-base",
+              "packages/leancode-analytics-firebase",
+              "packages/leancode-analytics-posthog"
+            ]
+          },
+          {
+            "group": "Developer Tools",
+            "pages": [
+              "packages/leancode-lint",
+              "packages/leancode-debug-page",
+              "packages/override-api-endpoint"
+            ]
+          },
+          {
+            "group": "App Features",
+            "pages": [
+              "packages/leancode-force-update"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/getting-started-with-cqrs",
+              "guides/authentication-setup",
+              "guides/analytics-integration",
+              "guides/custom-lint-configuration"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "CQRS backend communication",
+    "OAuth2 authentication client",
+    "Flutter hooks collection",
+    "Enhanced gradient rendering with HCT interpolation",
+    "Custom lint rules for Flutter",
+    "Analytics integration (Firebase, PostHog)",
+    "Force update functionality",
+    "Debug page utilities",
+    "Markup rendering support"
+  ],
+  "publicApiSurface": [
+    "Cqrs",
+    "Query",
+    "Command",
+    "LoginClient",
+    "OAuthSettings",
+    "CredentialsStorage",
+    "useBloc",
+    "useBlocListener",
+    "useDebounce",
+    "useFocused",
+    "EnhancedLinearGradient",
+    "EnhancedRadialGradient",
+    "HctColorTween",
+    "LeanCodeLintPlugin",
+    "LeanCodeLintConfig",
+    "Analytics",
+    "AnalyticsBackend",
+    "ForceUpdateChecker",
+    "DebugPage",
+    "MarkupParser"
+  ]
+}
